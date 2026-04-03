@@ -10,6 +10,10 @@ This guide is for deploying `RGE` to Render with:
 
 The repo already includes a Render Blueprint at [render.yaml](/e:/code/ReemTeamMasterWeb/RGE/render.yaml).
 
+Important:
+This guide assumes the Git repository you connected to Render is the `RGE` app itself.
+That means the Render repo root is already the app root, so `Root Directory` should be left blank.
+
 ## Architecture
 
 RGE is deployed as two app services plus one queue datastore:
@@ -59,6 +63,7 @@ In Render:
 2. Choose `Blueprint`.
 3. Connect the repo that contains `RGE`.
 4. Point Render at the repo root that contains [render.yaml](/e:/code/ReemTeamMasterWeb/RGE/render.yaml).
+5. Leave `Root Directory` blank.
 5. Review the three resources Render will create:
    - `rge-api`
    - `rge-workers`
@@ -67,6 +72,7 @@ In Render:
 
 Notes:
 
+- Do not set `Root Directory` to `RGE` unless your repo actually contains a nested `RGE/` folder.
 - The Blueprint already wires `REDIS_URL` from `rge-cache`.
 - `JWT_SECRET` and `RGE_INTERNAL_TOKEN` are auto-generated for `rge-api`.
 - `rge-workers` inherits shared secrets from `rge-api` through the Blueprint.
