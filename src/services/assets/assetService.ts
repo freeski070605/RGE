@@ -183,7 +183,7 @@ export const createAssetRecord = async (input: {
       kind,
       mimeType: input.mimeType,
       fileSize: input.fileSize,
-      originalPath: uploaded.secureUrl,
+      originalPath: uploaded.localPath,
       title: input.title ?? '',
       tags: input.tags ?? [],
       metadata: buildAssetMetadata({}, 'original', uploaded)
@@ -245,7 +245,7 @@ export const autoEditAsset = async (input: {
         tags: ['rge', 'asset', 'edited', 'image']
       });
 
-      asset.editedPath = uploaded.secureUrl;
+      asset.editedPath = uploaded.localPath;
       asset.metadata = buildAssetMetadata(asset.metadata, 'edited', uploaded) as never;
     } else {
       const { width, height } = getCanvasSize(preset);
@@ -285,7 +285,7 @@ export const autoEditAsset = async (input: {
         tags: ['rge', 'asset', 'edited', 'video']
       });
 
-      asset.editedPath = uploaded.secureUrl;
+      asset.editedPath = uploaded.localPath;
       asset.metadata = buildAssetMetadata(asset.metadata, 'edited', uploaded) as never;
     }
 

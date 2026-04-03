@@ -59,11 +59,20 @@ const PostSchema = new Schema(
     media: {
       status: {
         type: String,
-        enum: ['pending', 'ready', 'failed'],
+        enum: ['pending', 'queued', 'processing', 'succeeded', 'ready', 'failed'],
         default: 'pending'
       },
       imagePath: String,
-      videoPath: String
+      videoPath: String,
+      imagePublicUrl: String,
+      videoPublicUrl: String,
+      imageRemoteUrl: String,
+      videoRemoteUrl: String,
+      jobId: String,
+      errorMessage: String,
+      lastQueuedAt: Date,
+      lastStartedAt: Date,
+      lastFinishedAt: Date
     },
     schedule: {
       status: {

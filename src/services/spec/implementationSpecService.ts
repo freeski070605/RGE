@@ -1,16 +1,13 @@
 export const getImplementationSpec = () => ({
   system: {
-    name: 'ReemGrowth Engine V2',
+    name: 'ReemGrowth Engine Operator Assistant',
     workflow: [
-      'Backend game intelligence feed',
-      'RGE intelligence sync',
-      'Signal scoring',
-      'Content ideas',
-      'Creative briefs',
-      'Content variants',
-      'Media rendering',
-      'Publishing jobs',
-      'Performance insights'
+      'Detect live gameplay opportunities',
+      'Recommend the best angle, format, and timing',
+      'Create a unified content item with brief and variants',
+      'Approve or adjust in one review flow',
+      'Publish or schedule with media health guardrails',
+      'Learn from performance feedback and strategy signals'
     ]
   },
   mongoSchemas: [
@@ -28,19 +25,23 @@ export const getImplementationSpec = () => ({
     },
     {
       collection: 'content_ideas',
-      fields: ['signalIds', 'ideaType', 'goal', 'audience', 'platformRecommendation', 'priorityScore', 'headline', 'reason', 'hookAngle', 'ctaAngle', 'status']
+      fields: ['signalIds', 'ideaType', 'opportunityType', 'headline', 'whyItMatters', 'recommendedContentAngle', 'recommendedFormat', 'recommendedPlatforms', 'urgency', 'confidenceScore', 'estimatedValue', 'status']
+    },
+    {
+      collection: 'content_items',
+      fields: ['sourceOpportunityId', 'sourceSignalIds', 'title', 'opportunityType', 'strategyAngle', 'recommendedFormat', 'recommendedPlatforms', 'operatorMode', 'stage', 'briefId', 'selectedVariantId', 'publishingJobIds', 'analyticsSummary', 'schedule']
     },
     {
       collection: 'creative_briefs',
-      fields: ['contentIdeaId', 'objective', 'audience', 'platform', 'format', 'tone', 'hookDirection', 'cta', 'assetIds', 'generationPrompt', 'status']
+      fields: ['contentIdeaId', 'contentItemId', 'objective', 'audience', 'platform', 'format', 'tone', 'hookDirection', 'cta', 'assetIds', 'generationPrompt', 'status']
     },
     {
       collection: 'content_variants',
-      fields: ['creativeBriefId', 'variantLabel', 'hook', 'caption', 'hashtags', 'overlayText', 'cta', 'hookStyle', 'assetIds', 'media', 'status']
+      fields: ['creativeBriefId', 'contentItemId', 'variantLabel', 'hook', 'caption', 'hashtags', 'overlayText', 'cta', 'hookStyle', 'assetIds', 'media', 'status']
     },
     {
       collection: 'publishing_jobs',
-      fields: ['contentVariantId', 'platform', 'scheduledFor', 'publishedAt', 'status', 'captionSnapshot', 'mediaSnapshot', 'providerResponse']
+      fields: ['contentVariantId', 'contentItemId', 'platform', 'scheduledFor', 'publishedAt', 'status', 'captionSnapshot', 'mediaSnapshot', 'providerResponse']
     },
     {
       collection: 'performance_insights',
@@ -50,6 +51,23 @@ export const getImplementationSpec = () => ({
   apiRoutes: [
     'GET /api/health',
     'GET /api/dashboard',
+    'GET /api/command-center',
+    'GET /api/opportunities',
+    'POST /api/opportunities/:id/create-content-item',
+    'GET /api/pipeline',
+    'GET /api/content-items/:id',
+    'POST /api/content-items/:id/generate-copy',
+    'POST /api/content-items/:id/generate-media',
+    'POST /api/content-items/:id/approve',
+    'POST /api/content-items/:id/schedule',
+    'POST /api/content-items/:id/publish-now',
+    'POST /api/content-items/:id/archive',
+    'GET /api/calendar',
+    'GET /api/performance',
+    'GET /api/library',
+    'GET /api/growth-loops',
+    'GET /api/system-health',
+    'GET /api/media/diagnostics',
     'GET /api/v2/spec',
     'POST /api/v2/intelligence/sync',
     'GET /api/v2/intelligence/overview',
@@ -70,22 +88,20 @@ export const getImplementationSpec = () => ({
     'GET /api/v2/dashboard'
   ],
   dashboardScreens: [
-    'Overview',
-    'Today Queue',
-    'Leaderboards',
-    'Signal Inbox',
-    'Brief Builder',
-    'Variant Studio',
-    'Publishing Calendar',
-    'Insights',
-    'Asset Studio',
-    'Referrals'
+    'Command Center',
+    'Opportunities',
+    'Pipeline',
+    'Calendar',
+    'Performance',
+    'Library',
+    'Growth Loops',
+    'Settings'
   ],
   workerFlow: [
-    'backend /api/rge/feed -> intelligence queue -> sync player stats, leaderboards, signals, and seed ideas',
-    'approved idea -> create brief -> generate variants',
-    'variant media request -> media queue -> render image and video assets',
-    'schedule request -> scheduler queue -> publish live Instagram content at the scheduled time',
-    'analytics tracking -> performance insights -> strategy snapshot for future brief and variant generation'
+    'backend /api/rge/feed -> intelligence queue -> sync player stats, leaderboards, signals, and ranked opportunities',
+    'opportunity -> content item -> brief -> variants -> selected review object',
+    'content item media request -> media queue -> render image and video assets with persisted status and diagnostics',
+    'schedule or publish request -> scheduler queue -> execute live publishing jobs with guardrails',
+    'performance tracking -> insights -> strategy snapshot and recommendation loop'
   ]
 });

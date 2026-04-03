@@ -11,6 +11,8 @@ import {
   uploadFileToStorage
 } from '../storage/storageService';
 
+type RenderedArtifact = Awaited<ReturnType<typeof uploadBufferToStorage>>;
+
 const wrapText = (
   context: CanvasRenderingContext2D,
   text: string,
@@ -46,7 +48,7 @@ export const renderCreativeImage = async (post: {
   overlayText: string;
   hashtags: string[];
   backgroundImagePath?: string | null;
-}): Promise<string> => {
+}): Promise<RenderedArtifact> => {
   const canvas = createCanvas(1080, 1080);
   const context = canvas.getContext('2d');
 
@@ -95,7 +97,7 @@ export const renderCreativeImage = async (post: {
   context.font = 'bold 30px Arial';
   wrapText(context, post.hashtags.join(' '), 90, 930, 880, 38);
 
-  const uploaded = await uploadBufferToStorage({
+  return uploadBufferToStorage({
     buffer: canvas.toBuffer('image/png'),
     folder: ['generated', 'images'],
     publicId: post.id,
@@ -103,15 +105,13 @@ export const renderCreativeImage = async (post: {
     format: 'png',
     tags: ['rge', 'generated', 'image']
   });
-
-  return uploaded.secureUrl;
 };
 
 export const renderCreativeVideo = async (input: {
   imagePath: string;
   id: string;
   sourceVideoPath?: string | null;
-}): Promise<string> => {
+}): Promise<Awaited<ReturnType<typeof uploadFileToStorage>>> => {
   const outputPath = await createTempFilePath(input.id, '.mp4');
 
   try {
@@ -174,18 +174,65 @@ export const renderCreativeVideo = async (input: {
       });
     });
 
-    const uploaded = await uploadFileToStorage({
+    return uploadFileToStorage({
       filePath: outputPath,
       folder: ['generated', 'videos'],
       publicId: input.id,
       resourceType: 'video',
       tags: ['rge', 'generated', 'video']
     });
-
-    return uploaded.secureUrl;
   } finally {
     await removeTempFile(outputPath);
   }
+};
+
+export const markPostMediaQueued = async (postId: string, jobId?: string | null) => {
+  const post = await PostModel.findById(postId);
+  if (!post) {
+    return null;
+  }
+
+  const media = post.media ?? ((post.media = { status: 'pending' } as never), post.media);
+  media.status = 'queued';
+  media.jobId = jobId ?? media.jobId;
+  media.errorMessage = undefined;
+  media.lastQueuedAt = new Date();
+  await post.save();
+  return post;
+};
+
+export const markPostMediaProcessing = async (postId: string, jobId?: string | null) => {
+  const post = await PostModel.findById(postId);
+  if (!post) {
+    return null;
+  }
+
+  const media = post.media ?? ((post.media = { status: 'pending' } as never), post.media);
+  media.status = 'processing';
+  media.jobId = jobId ?? media.jobId;
+  media.errorMessage = undefined;
+  media.lastStartedAt = new Date();
+  await post.save();
+  return post;
+};
+
+export const markPostMediaFailed = async (postId: string, message: string, jobId?: string | null) => {
+  const post = await PostModel.findById(postId);
+  if (!post) {
+    return null;
+  }
+
+  const media = post.media ?? ((post.media = { status: 'pending' } as never), post.media);
+  const schedule = post.schedule ?? ((post.schedule = { status: 'draft' } as never), post.schedule);
+
+  media.status = 'failed';
+  media.jobId = jobId ?? media.jobId;
+  media.errorMessage = message;
+  media.lastFinishedAt = new Date();
+  schedule.status = 'failed';
+  schedule.errorMessage = message;
+  await post.save();
+  return post;
 };
 
 export const createMediaForPost = async (postId: string) => {
@@ -201,7 +248,7 @@ export const createMediaForPost = async (postId: string) => {
   const preferredImageAsset = await getPreferredAssetForPost(String(post._id), 'image');
   const preferredVideoAsset = await getPreferredAssetForPost(String(post._id), 'video');
 
-  const imagePath = await renderCreativeImage({
+  const image = await renderCreativeImage({
     id: String(post._id),
     hook: post.hook,
     caption: post.caption,
@@ -210,11 +257,13 @@ export const createMediaForPost = async (postId: string) => {
     backgroundImagePath: preferredImageAsset?.path
   });
 
-  let videoPath: string | undefined;
+  let video:
+    | Awaited<ReturnType<typeof uploadFileToStorage>>
+    | undefined;
   if (env.ENABLE_VIDEO_GENERATION) {
     try {
-      videoPath = await renderCreativeVideo({
-        imagePath,
+      video = await renderCreativeVideo({
+        imagePath: image.localPath,
         id: String(post._id),
         sourceVideoPath: preferredVideoAsset?.path
       });
@@ -226,10 +275,17 @@ export const createMediaForPost = async (postId: string) => {
   const media = post.media ?? ((post.media = { status: 'pending' } as never), post.media);
   const schedule = post.schedule ?? ((post.schedule = { status: 'draft' } as never), post.schedule);
 
-  media.status = 'ready';
-  media.imagePath = imagePath;
-  media.videoPath = videoPath;
+  media.status = 'succeeded';
+  media.imagePath = image.localPath;
+  media.imagePublicUrl = image.publicUrl;
+  media.imageRemoteUrl = image.remoteUrl ?? undefined;
+  media.videoPath = video?.localPath;
+  media.videoPublicUrl = video?.publicUrl;
+  media.videoRemoteUrl = video?.remoteUrl ?? undefined;
+  media.errorMessage = undefined;
+  media.lastFinishedAt = new Date();
   schedule.status = 'media_ready';
+  schedule.errorMessage = undefined;
   await post.save();
 
   return post;

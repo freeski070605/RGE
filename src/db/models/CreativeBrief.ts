@@ -8,6 +8,11 @@ const CreativeBriefSchema = new Schema(
       required: true,
       index: true
     },
+    contentItemId: {
+      type: Schema.Types.ObjectId,
+      ref: 'ContentItem',
+      index: true
+    },
     objective: {
       type: String,
       required: true

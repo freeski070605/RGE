@@ -782,6 +782,219 @@ select:focus {
   background: rgba(79, 20, 29, 0.95);
 }
 
+.dashboard-shell--assistant {
+  grid-template-columns: 250px minmax(0, 1fr) 380px;
+}
+
+.hero--command {
+  background:
+    radial-gradient(circle at top left, rgba(125, 211, 167, 0.12), transparent 24rem),
+    radial-gradient(circle at bottom right, rgba(244, 182, 95, 0.1), transparent 28rem),
+    var(--bg-elevated);
+}
+
+.split-grid--command {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.9fr);
+}
+
+.opportunity-grid,
+.calendar-grid,
+.health-grid,
+.health-list,
+.kanban-grid,
+.pipeline-table {
+  display: grid;
+  gap: 1rem;
+}
+
+.opportunity-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.opportunity-card,
+.calendar-day,
+.kanban-column,
+.preset-card {
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.opportunity-card {
+  padding: 1rem;
+  display: grid;
+  gap: 0.9rem;
+  cursor: pointer;
+}
+
+.opportunity-card--selected,
+.kanban-card--selected,
+.pipeline-row--selected,
+.preset-card--selected {
+  border-color: rgba(45, 212, 191, 0.4);
+  box-shadow: 0 0 0 1px rgba(45, 212, 191, 0.2);
+}
+
+.opportunity-card h3,
+.kanban-card strong,
+.calendar-day__header strong,
+.preset-card strong {
+  margin: 0;
+  font-family: 'Space Grotesk', 'Trebuchet MS', sans-serif;
+}
+
+.opportunity-card p,
+.compact-row p,
+.calendar-entry p,
+.preset-card p {
+  margin: 0;
+}
+
+.opportunity-compact,
+.compact-row,
+.pipeline-row,
+.calendar-entry,
+.health-tile,
+.kanban-column__header,
+.calendar-day__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.opportunity-compact {
+  width: 100%;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  padding: 0.85rem 0.9rem;
+  cursor: pointer;
+}
+
+.opportunity-compact strong {
+  display: block;
+  margin-top: 0.35rem;
+}
+
+.health-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.health-tile {
+  padding: 0.85rem 0.95rem;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.health-tile span {
+  color: var(--muted);
+  text-transform: uppercase;
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+}
+
+.kanban-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.kanban-column {
+  padding: 1rem;
+  display: grid;
+  gap: 0.8rem;
+}
+
+.kanban-column__header span,
+.calendar-day__header span {
+  color: var(--muted);
+}
+
+.kanban-card,
+.pipeline-row,
+.preset-card {
+  width: 100%;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 0.9rem;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  text-align: left;
+  cursor: pointer;
+}
+
+.kanban-card {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.pipeline-table {
+  margin-top: 1rem;
+}
+
+.pipeline-row {
+  grid-template-columns: 1.4fr repeat(3, minmax(0, 0.6fr));
+  display: grid;
+  align-items: center;
+}
+
+.pipeline-row span,
+.calendar-entry span {
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.76rem;
+}
+
+.calendar-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.calendar-day {
+  padding: 1rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.calendar-entry {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 0.8rem;
+}
+
+.calendar-entry:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.preset-card {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.asset-grid--library {
+  max-height: 42rem;
+}
+
+.health-list {
+  gap: 0.8rem;
+}
+
+.compact-row {
+  padding: 0.8rem 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.compact-row:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.post-card__actions--stack {
+  flex-direction: column;
+  align-items: stretch;
+}
+
 @media (max-width: 1360px) {
   .dashboard-shell {
     grid-template-columns: 220px minmax(0, 1fr);
@@ -801,7 +1014,11 @@ select:focus {
   .stats-grid,
   .post-card__grid,
   .leaderboard-grid,
-  .variant-grid {
+  .variant-grid,
+  .opportunity-grid,
+  .calendar-grid,
+  .kanban-grid,
+  .pipeline-row {
     grid-template-columns: 1fr;
   }
 
@@ -840,7 +1057,13 @@ select:focus {
   .timeline-item,
   .leaderboard__item,
   .signal-row,
-  .idea-card__header {
+  .idea-card__header,
+  .pipeline-row,
+  .compact-row,
+  .opportunity-compact,
+  .calendar-entry,
+  .kanban-column__header,
+  .calendar-day__header {
     flex-direction: column;
     align-items: flex-start;
   }

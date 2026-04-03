@@ -9,7 +9,7 @@ import { GameSignalModel } from '../../db/models/GameSignal';
 import { PerformanceInsightModel } from '../../db/models/PerformanceInsight';
 import { PublishingJobModel } from '../../db/models/PublishingJob';
 import { AppError } from '../../utils/errors';
-import { toAssetUrl, toMediaUrl } from '../../utils/publicPaths';
+import { toAbsoluteAppUrl, toAssetUrl, toMediaUrl } from '../../utils/publicPaths';
 import { renderCreativeImage, renderCreativeVideo } from '../media-engine/mediaEngine';
 import { publishToSocialPlatform } from '../social/socialPublisher';
 
@@ -56,20 +56,62 @@ const normalizeHashtags = (hashtags: string[]) =>
     .map((hashtag) => (hashtag.startsWith('#') ? hashtag : `#${hashtag}`))
     .slice(0, 8);
 
+const normalizeMediaStatus = (status?: string | null) => {
+  if (!status || status === 'ready') {
+    return status === 'ready' ? 'succeeded' : 'pending';
+  }
+
+  return status;
+};
+
+const resolveMediaPreviewUrl = (input: {
+  remoteUrl?: string | null;
+  publicUrl?: string | null;
+  filePath?: string | null;
+}) => input.remoteUrl || input.publicUrl || toMediaUrl(input.filePath) || null;
+
+const resolvePublishableMediaUrl = (input: {
+  remoteUrl?: string | null;
+  publicUrl?: string | null;
+  filePath?: string | null;
+}) => {
+  if (input.remoteUrl) {
+    return input.remoteUrl;
+  }
+
+  if (input.publicUrl) {
+    return toAbsoluteAppUrl(input.publicUrl);
+  }
+
+  return toAbsoluteAppUrl(toMediaUrl(input.filePath));
+};
+
 const serializeIdea = (idea: any, signalCount = 0) => ({
   id: String(idea._id),
   ideaType: idea.ideaType,
+  opportunityType: idea.opportunityType ?? idea.ideaType,
   goal: idea.goal,
   audience: idea.audience,
   platformRecommendation: idea.platformRecommendation ?? [],
+  recommendedPlatforms: idea.recommendedPlatforms ?? idea.platformRecommendation ?? [],
   priorityScore: idea.priorityScore ?? 0,
   headline: idea.headline,
   reason: idea.reason,
+  whyItMatters: idea.whyItMatters ?? idea.reason ?? '',
   hookAngle: idea.hookAngle,
+  recommendedContentAngle: idea.recommendedContentAngle ?? idea.hookAngle ?? '',
+  recommendedFormat: idea.recommendedFormat ?? '',
   ctaAngle: idea.ctaAngle,
+  urgency: idea.urgency ?? 'medium',
+  confidenceScore: idea.confidenceScore ?? 0,
+  estimatedValue: idea.estimatedValue ?? 0,
+  whyThisRecommendation: idea.whyThisRecommendation ?? idea.reason ?? '',
   linkedPlayers: idea.linkedPlayers ?? [],
   linkedAssets: (idea.linkedAssets ?? []).map((asset: any) => String(asset._id ?? asset)),
   campaignTags: idea.campaignTags ?? [],
+  operatorStatus: idea.operatorStatus ?? 'open',
+  savedForLaterAt: idea.savedForLaterAt ?? null,
+  dismissedAt: idea.dismissedAt ?? null,
   signalCount,
   status: idea.status,
   createdAt: idea.createdAt,
@@ -105,6 +147,7 @@ const serializeBrief = (brief: any, idea?: any, assets?: any[]) => ({
 
 const serializeVariant = (variant: any, brief?: any, idea?: any, assets?: any[]) => ({
   id: String(variant._id),
+  contentItemId: variant.contentItemId ? String(variant.contentItemId) : null,
   creativeBriefId: String(variant.creativeBriefId?._id ?? variant.creativeBriefId),
   variantLabel: variant.variantLabel,
   hook: variant.hook,
@@ -115,11 +158,24 @@ const serializeVariant = (variant: any, brief?: any, idea?: any, assets?: any[])
   tone: variant.tone,
   hookStyle: variant.hookStyle,
   media: {
-    status: variant.media?.status ?? 'pending',
+    status: normalizeMediaStatus(variant.media?.status),
     imagePath: variant.media?.imagePath ?? null,
     videoPath: variant.media?.videoPath ?? null,
-    imageUrl: toMediaUrl(variant.media?.imagePath),
-    videoUrl: toMediaUrl(variant.media?.videoPath)
+    imageUrl: resolveMediaPreviewUrl({
+      remoteUrl: variant.media?.imageRemoteUrl,
+      publicUrl: variant.media?.imagePublicUrl,
+      filePath: variant.media?.imagePath
+    }),
+    videoUrl: resolveMediaPreviewUrl({
+      remoteUrl: variant.media?.videoRemoteUrl,
+      publicUrl: variant.media?.videoPublicUrl,
+      filePath: variant.media?.videoPath
+    }),
+    errorMessage: variant.media?.errorMessage ?? null,
+    jobId: variant.media?.jobId ?? null,
+    lastQueuedAt: variant.media?.lastQueuedAt ?? null,
+    lastStartedAt: variant.media?.lastStartedAt ?? null,
+    lastFinishedAt: variant.media?.lastFinishedAt ?? null
   },
   assetIds: (variant.assetIds ?? []).map((asset: any) => String(asset._id ?? asset)),
   assets:
@@ -147,6 +203,7 @@ const serializeVariant = (variant: any, brief?: any, idea?: any, assets?: any[])
 
 const serializePublishingJob = (job: any, variant?: any, insight?: any) => ({
   id: String(job._id),
+  contentItemId: job.contentItemId ? String(job.contentItemId) : null,
   contentVariantId: String(job.contentVariantId?._id ?? job.contentVariantId),
   platform: job.platform,
   scheduledFor: job.scheduledFor ?? null,
@@ -154,8 +211,16 @@ const serializePublishingJob = (job: any, variant?: any, insight?: any) => ({
   status: job.status,
   captionSnapshot: job.captionSnapshot ?? '',
   mediaSnapshot: {
-    imageUrl: toMediaUrl(job.mediaSnapshot?.imagePath),
-    videoUrl: toMediaUrl(job.mediaSnapshot?.videoPath)
+    imageUrl: resolveMediaPreviewUrl({
+      remoteUrl: job.mediaSnapshot?.imageRemoteUrl,
+      publicUrl: job.mediaSnapshot?.imagePublicUrl,
+      filePath: job.mediaSnapshot?.imagePath
+    }),
+    videoUrl: resolveMediaPreviewUrl({
+      remoteUrl: job.mediaSnapshot?.videoRemoteUrl,
+      publicUrl: job.mediaSnapshot?.videoPublicUrl,
+      filePath: job.mediaSnapshot?.videoPath
+    })
   },
   providerResponse: job.providerResponse ?? {},
   errorMessage: job.errorMessage ?? null,
@@ -254,10 +319,10 @@ export const createBriefFromIdea = async (input: {
     contentIdeaId: idea._id,
     objective: input.objective || `${idea.goal} through ${idea.ideaType} content`,
     audience: idea.audience,
-    platform: input.platform || idea.platformRecommendation[0] || 'instagram',
-    format: input.format || (idea.ideaType === 'leaderboard' ? 'carousel' : 'reel'),
+    platform: input.platform || idea.recommendedPlatforms?.[0] || idea.platformRecommendation[0] || 'instagram',
+    format: input.format || idea.recommendedFormat || (idea.ideaType === 'leaderboard' ? 'carousel' : 'reel'),
     tone: input.tone || (idea.goal === 'conversion' ? 'competitive and persuasive' : 'hype and social-first'),
-    hookDirection: idea.hookAngle,
+    hookDirection: idea.recommendedContentAngle || idea.hookAngle,
     cta: idea.ctaAngle,
     requiredAssetKinds: ['image', 'video'],
     assetIds,
@@ -528,6 +593,57 @@ const getAssetPathsForVariant = async (variant: any, brief: any, idea: any) => {
   };
 };
 
+export const markVariantMediaQueued = async (variantId: string, jobId?: string | null) => {
+  const variant = await ContentVariantModel.findById(variantId);
+  if (!variant) {
+    return null;
+  }
+
+  variant.media = {
+    ...(variant.media ?? {}),
+    status: 'queued',
+    jobId: jobId ?? variant.media?.jobId,
+    errorMessage: undefined,
+    lastQueuedAt: new Date()
+  } as never;
+  await variant.save();
+  return variant;
+};
+
+export const markVariantMediaProcessing = async (variantId: string, jobId?: string | null) => {
+  const variant = await ContentVariantModel.findById(variantId);
+  if (!variant) {
+    return null;
+  }
+
+  variant.media = {
+    ...(variant.media ?? {}),
+    status: 'processing',
+    jobId: jobId ?? variant.media?.jobId,
+    errorMessage: undefined,
+    lastStartedAt: new Date()
+  } as never;
+  await variant.save();
+  return variant;
+};
+
+export const markVariantMediaFailed = async (variantId: string, message: string, jobId?: string | null) => {
+  const variant = await ContentVariantModel.findById(variantId);
+  if (!variant) {
+    return null;
+  }
+
+  variant.media = {
+    ...(variant.media ?? {}),
+    status: 'failed',
+    jobId: jobId ?? variant.media?.jobId,
+    errorMessage: message,
+    lastFinishedAt: new Date()
+  } as never;
+  await variant.save();
+  return variant;
+};
+
 export const createMediaForVariant = async (variantId: string) => {
   const variant = await ContentVariantModel.findById(variantId).populate({
     path: 'creativeBriefId',
@@ -548,7 +664,7 @@ export const createMediaForVariant = async (variantId: string) => {
     idea
   );
 
-  const imagePath = await renderCreativeImage({
+  const image = await renderCreativeImage({
     id: `variant-${String(variant._id)}`,
     hook: variant.hook,
     caption: variant.caption,
@@ -557,11 +673,13 @@ export const createMediaForVariant = async (variantId: string) => {
     backgroundImagePath: preferredImagePath
   });
 
-  let videoPath: string | undefined;
+  let video:
+    | Awaited<ReturnType<typeof renderCreativeVideo>>
+    | undefined;
   if (env.ENABLE_VIDEO_GENERATION) {
     try {
-      videoPath = await renderCreativeVideo({
-        imagePath,
+      video = await renderCreativeVideo({
+        imagePath: image.localPath,
         id: `variant-${String(variant._id)}`,
         sourceVideoPath: preferredVideoPath
       });
@@ -571,9 +689,16 @@ export const createMediaForVariant = async (variantId: string) => {
   }
 
   variant.media = {
-    status: 'ready',
-    imagePath,
-    videoPath
+    ...(variant.media ?? {}),
+    status: 'succeeded',
+    imagePath: image.localPath,
+    videoPath: video?.localPath,
+    imagePublicUrl: image.publicUrl,
+    videoPublicUrl: video?.publicUrl,
+    imageRemoteUrl: image.remoteUrl ?? undefined,
+    videoRemoteUrl: video?.remoteUrl ?? undefined,
+    errorMessage: undefined,
+    lastFinishedAt: new Date()
   } as never;
   variant.status = 'ready';
   await variant.save();
@@ -581,11 +706,14 @@ export const createMediaForVariant = async (variantId: string) => {
   return serializeVariant(variant.toObject(), brief?.toObject?.() ?? brief, idea?.toObject?.() ?? idea, assets);
 };
 
-export const queueMediaForVariant = async (variantId: string) =>
-  enqueueMediaCreation({
+export const queueMediaForVariant = async (variantId: string) => {
+  const job = await enqueueMediaCreation({
     targetType: 'variant',
     variantId
   });
+  await markVariantMediaQueued(variantId, String(job.id));
+  return job;
+};
 
 const ensurePublishingJobInsight = async (job: any, variant: any, brief: any, idea: any) => {
   return PerformanceInsightModel.findOneAndUpdate(
@@ -630,7 +758,7 @@ export const scheduleVariantPublishing = async (input: {
     throw new AppError('Content variant not found', 404);
   }
 
-  if (!variant.media?.imagePath && !variant.media?.videoPath) {
+  if (normalizeMediaStatus(variant.media?.status) !== 'succeeded' || (!variant.media?.imagePath && !variant.media?.videoPath)) {
     throw new AppError('Create media before scheduling the variant', 409);
   }
 
@@ -653,13 +781,18 @@ export const scheduleVariantPublishing = async (input: {
       {
         $set: {
           contentVariantId: variant._id,
+          contentItemId: variant.contentItemId,
           platform,
           scheduledFor: scheduledForDate,
           status: 'scheduled',
           captionSnapshot: `${variant.hook}\n\n${variant.caption}\n\n${(variant.hashtags ?? []).join(' ')}`.trim(),
           mediaSnapshot: {
             imagePath: variant.media?.imagePath,
-            videoPath: variant.media?.videoPath
+            videoPath: variant.media?.videoPath,
+            imagePublicUrl: variant.media?.imagePublicUrl,
+            videoPublicUrl: variant.media?.videoPublicUrl,
+            imageRemoteUrl: variant.media?.imageRemoteUrl,
+            videoRemoteUrl: variant.media?.videoRemoteUrl
           },
           errorMessage: null
         }
@@ -710,11 +843,23 @@ export const executePublishingJob = async (publishingJobId: string) => {
   await job.save();
 
   try {
+    const publishableMediaUrl =
+      resolvePublishableMediaUrl({
+        remoteUrl: job.mediaSnapshot?.videoRemoteUrl,
+        publicUrl: job.mediaSnapshot?.videoPublicUrl,
+        filePath: job.mediaSnapshot?.videoPath
+      }) ||
+      resolvePublishableMediaUrl({
+        remoteUrl: job.mediaSnapshot?.imageRemoteUrl,
+        publicUrl: job.mediaSnapshot?.imagePublicUrl,
+        filePath: job.mediaSnapshot?.imagePath
+      });
+
     const providerResponse = await publishToSocialPlatform({
       platform: job.platform,
       postId: String(job._id),
       caption: job.captionSnapshot,
-      mediaUrl: job.mediaSnapshot?.videoPath ?? job.mediaSnapshot?.imagePath ?? undefined
+      mediaUrl: publishableMediaUrl ?? undefined
     });
 
     job.status = 'published';

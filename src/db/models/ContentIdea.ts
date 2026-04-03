@@ -58,6 +58,55 @@ const ContentIdeaSchema = new Schema(
       type: [String],
       default: []
     },
+    opportunityType: {
+      type: String,
+      index: true
+    },
+    whyItMatters: {
+      type: String,
+      default: ''
+    },
+    sourceEventIds: {
+      type: [String],
+      default: []
+    },
+    recommendedContentAngle: {
+      type: String,
+      default: ''
+    },
+    recommendedFormat: {
+      type: String,
+      default: ''
+    },
+    recommendedPlatforms: {
+      type: [String],
+      default: []
+    },
+    urgency: {
+      type: String,
+      enum: ['low', 'medium', 'high', 'critical'],
+      default: 'medium'
+    },
+    confidenceScore: {
+      type: Number,
+      default: 0
+    },
+    estimatedValue: {
+      type: Number,
+      default: 0
+    },
+    whyThisRecommendation: {
+      type: String,
+      default: ''
+    },
+    operatorStatus: {
+      type: String,
+      enum: ['open', 'saved', 'dismissed', 'converted'],
+      default: 'open',
+      index: true
+    },
+    savedForLaterAt: Date,
+    dismissedAt: Date,
     status: {
       type: String,
       enum: ['proposed', 'approved', 'briefed', 'variant_ready', 'scheduled', 'published', 'archived'],

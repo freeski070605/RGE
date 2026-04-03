@@ -4,6 +4,25 @@ import { z } from 'zod';
 
 dotenv.config();
 
+const booleanFromEnv = z.preprocess((value) => {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (['true', '1', 'yes', 'on'].includes(normalized)) {
+      return true;
+    }
+
+    if (['false', '0', 'no', 'off', ''].includes(normalized)) {
+      return false;
+    }
+  }
+
+  return value;
+}, z.boolean());
+
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().default(4010),
@@ -26,7 +45,7 @@ const envSchema = z.object({
   MEDIA_OUTPUT_DIR: z.string().default('storage/generated'),
   ASSET_UPLOAD_DIR: z.string().default('storage/assets'),
   VIDEO_DURATION_SECONDS: z.coerce.number().default(6),
-  ENABLE_VIDEO_GENERATION: z.coerce.boolean().default(true),
+  ENABLE_VIDEO_GENERATION: booleanFromEnv.default(true),
   UPLOAD_MAX_FILE_SIZE_BYTES: z.coerce.number().int().positive().default(250 * 1024 * 1024),
   API_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(15 * 60 * 1000),
   API_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(300),
@@ -39,6 +58,9 @@ const envSchema = z.object({
   SCHEDULER_WORKER_CONCURRENCY: z.coerce.number().default(2),
   INTELLIGENCE_WORKER_CONCURRENCY: z.coerce.number().default(1),
   QUEUE_JOB_ATTEMPTS: z.coerce.number().default(3),
+  WORKER_HEARTBEAT_STALE_MS: z.coerce.number().default(2 * 60 * 1000),
+  BACKEND_HEALTH_TIMEOUT_MS: z.coerce.number().default(5_000),
+  AUTOPILOT_SCHEDULE_DELAY_MINUTES: z.coerce.number().default(30),
   REFERRAL_REWARD_CENTS: z.coerce.number().default(500),
   RGE_SYNC_DAYS: z.coerce.number().default(30),
   CLOUDINARY_CLOUD_NAME: z.string().default(''),

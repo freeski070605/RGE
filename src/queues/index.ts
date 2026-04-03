@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { Job, Queue } from 'bullmq';
 import { env } from '../config/env';
 import { createRedisConnection } from '../config/redis';
@@ -22,10 +23,26 @@ const queueOptions = {
   }
 };
 
-export const intelligenceQueue = new Queue(queueNames.intelligence, queueOptions);
-export const contentQueue = new Queue(queueNames.content, queueOptions);
-export const mediaQueue = new Queue(queueNames.media, queueOptions);
-export const schedulerQueue = new Queue(queueNames.scheduler, queueOptions);
+const useInlineQueueDriver = env.NODE_ENV === 'test';
+const createTestQueue = () =>
+  ({
+    add: async (_name: string, data: unknown) => createInlineJob(data),
+    getJobCounts: async () => {
+      throw new Error('Queue driver disabled in test mode');
+    },
+    close: async () => undefined
+  }) as unknown as Queue;
+
+export const intelligenceQueue = useInlineQueueDriver ? createTestQueue() : new Queue(queueNames.intelligence, queueOptions);
+export const contentQueue = useInlineQueueDriver ? createTestQueue() : new Queue(queueNames.content, queueOptions);
+export const mediaQueue = useInlineQueueDriver ? createTestQueue() : new Queue(queueNames.media, queueOptions);
+export const schedulerQueue = useInlineQueueDriver ? createTestQueue() : new Queue(queueNames.scheduler, queueOptions);
+
+const createInlineJob = async <T>(data: T): Promise<Job<T>> =>
+  ({
+    id: `inline-${randomUUID()}`,
+    data
+  }) as Job<T>;
 
 export type IntelligenceJobData = {
   days?: number;
@@ -59,15 +76,19 @@ export type ScheduleJobData =
     };
 
 export const enqueueIntelligenceSync = (data: IntelligenceJobData): Promise<Job<IntelligenceJobData>> =>
-  intelligenceQueue.add('sync-intelligence', data);
+  useInlineQueueDriver ? createInlineJob(data) : intelligenceQueue.add('sync-intelligence', data);
 
 export const enqueueContentGeneration = (data: ContentJobData): Promise<Job<ContentJobData>> =>
-  contentQueue.add('generate-content', data);
+  useInlineQueueDriver ? createInlineJob(data) : contentQueue.add('generate-content', data);
 
 export const enqueueMediaCreation = (data: MediaJobData): Promise<Job<MediaJobData>> =>
-  mediaQueue.add('create-media', data);
+  useInlineQueueDriver ? createInlineJob(data) : mediaQueue.add('create-media', data);
 
 export const schedulePostPublishing = (data: ScheduleJobData): Promise<Job<ScheduleJobData>> => {
+  if (useInlineQueueDriver) {
+    return createInlineJob(data);
+  }
+
   const delay = Math.max(new Date(data.scheduledFor).getTime() - Date.now(), 0);
 
   return schedulerQueue.add('publish-post', data, {

@@ -45,7 +45,32 @@ import {
 } from '../services/intelligence/intelligenceService';
 import { createReferralCode, recordReferralInvite, rewardReferralInvite } from '../services/referral/referralService';
 import { publishPost, queuePostForPublishing } from '../services/scheduler/schedulerService';
+import { getCommandCenter } from '../services/operator/commandCenterService';
+import {
+  approveContentItem,
+  archiveContentItem,
+  createContentItemFromOpportunity,
+  dismissOpportunity,
+  generateContentItemCopy,
+  generateContentItemMedia,
+  getCalendarView,
+  getContentItemById,
+  listPipeline,
+  publishContentItemNow,
+  saveContentItemDraft,
+  saveOpportunityForLater,
+  scheduleContentItem,
+  selectContentItemVariant,
+  selectContentItemVisualPreset
+} from '../services/operator/contentItemService';
+import { getGrowthLoopsView } from '../services/operator/growthLoopsService';
+import { getLibraryView } from '../services/operator/libraryService';
+import { listOpportunities } from '../services/operator/opportunityService';
+import { getPerformanceView } from '../services/operator/performanceService';
+import { getOperatorSettings, updateOperatorSettings } from '../services/operator/settingsService';
+import { markPostMediaQueued } from '../services/media-engine/mediaEngine';
 import { getImplementationSpec } from '../services/spec/implementationSpecService';
+import { getMediaDiagnostics, getSystemHealth } from '../services/system/systemHealthService';
 import { asyncHandler } from '../utils/asyncHandler';
 import { AppError } from '../utils/errors';
 
@@ -195,6 +220,31 @@ const publishMetricsSchema = z.object({
   saves: z.number().optional(),
   impressions: z.number().optional()
 });
+
+const updateOperatorSettingsSchema = z.object({
+  mode: z.enum(['autopilot', 'assisted', 'manual']).optional()
+});
+
+const generateCopySchema = z.object({
+  count: z.number().int().min(1).max(5).optional()
+});
+
+const contentItemScheduleSchema = z.object({
+  scheduledFor: z.string().min(1),
+  platforms: optionalPlatformsSchema
+});
+
+const selectVariantSchema = z.object({
+  variantId: z.string().min(1)
+});
+
+const selectVisualPresetSchema = z.object({
+  preset: z.string().min(1)
+});
+
+const archiveContentItemSchema = z.object({
+  reason: z.string().optional()
+});
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1)
@@ -249,6 +299,216 @@ router.get(
 );
 
 router.use(requireAuthenticatedAccess);
+
+router.get(
+  '/settings',
+  asyncHandler(async (req, res) => {
+    const settings = await getOperatorSettings(req.operator?.email || env.OPERATOR_EMAIL);
+    res.json(settings);
+  })
+);
+
+router.patch(
+  '/settings',
+  asyncHandler(async (req, res) => {
+    const body = updateOperatorSettingsSchema.parse(req.body ?? {});
+    const settings = await updateOperatorSettings(req.operator?.email || env.OPERATOR_EMAIL, body);
+    res.json(settings);
+  })
+);
+
+router.get(
+  '/command-center',
+  asyncHandler(async (_req, res) => {
+    res.json(await getCommandCenter());
+  })
+);
+
+router.get(
+  '/opportunities',
+  asyncHandler(async (_req, res) => {
+    res.json(await listOpportunities());
+  })
+);
+
+router.post(
+  '/opportunities/:id/create-content-item',
+  asyncHandler(async (req, res) => {
+    const opportunityId = z.string().parse(req.params.id);
+    const item = await createContentItemFromOpportunity({
+      opportunityId,
+      operatorEmail: req.operator?.email || env.OPERATOR_EMAIL
+    });
+    res.status(201).json(item);
+  })
+);
+
+router.post(
+  '/opportunities/:id/save-for-later',
+  asyncHandler(async (req, res) => {
+    const opportunityId = z.string().parse(req.params.id);
+    const saved = await saveOpportunityForLater(opportunityId);
+    res.json({
+      id: String(saved._id),
+      operatorStatus: saved.operatorStatus,
+      savedForLaterAt: saved.savedForLaterAt
+    });
+  })
+);
+
+router.post(
+  '/opportunities/:id/dismiss',
+  asyncHandler(async (req, res) => {
+    const opportunityId = z.string().parse(req.params.id);
+    const dismissed = await dismissOpportunity(opportunityId);
+    res.json({
+      id: String(dismissed._id),
+      operatorStatus: dismissed.operatorStatus,
+      dismissedAt: dismissed.dismissedAt
+    });
+  })
+);
+
+router.get(
+  '/pipeline',
+  asyncHandler(async (_req, res) => {
+    res.json(await listPipeline());
+  })
+);
+
+router.get(
+  '/content-items/:id',
+  asyncHandler(async (req, res) => {
+    const itemId = z.string().parse(req.params.id);
+    res.json(await getContentItemById(itemId));
+  })
+);
+
+router.post(
+  '/content-items/:id/generate-copy',
+  asyncHandler(async (req, res) => {
+    const itemId = z.string().parse(req.params.id);
+    const body = generateCopySchema.parse(req.body ?? {});
+    res.json(await generateContentItemCopy({ itemId, count: body.count }));
+  })
+);
+
+router.post(
+  '/content-items/:id/generate-media',
+  asyncHandler(async (req, res) => {
+    const itemId = z.string().parse(req.params.id);
+    res.json(await generateContentItemMedia(itemId));
+  })
+);
+
+router.post(
+  '/content-items/:id/approve',
+  asyncHandler(async (req, res) => {
+    const itemId = z.string().parse(req.params.id);
+    res.json(await approveContentItem(itemId));
+  })
+);
+
+router.post(
+  '/content-items/:id/save-draft',
+  asyncHandler(async (req, res) => {
+    const itemId = z.string().parse(req.params.id);
+    res.json(await saveContentItemDraft(itemId));
+  })
+);
+
+router.post(
+  '/content-items/:id/select-variant',
+  asyncHandler(async (req, res) => {
+    const itemId = z.string().parse(req.params.id);
+    const body = selectVariantSchema.parse(req.body ?? {});
+    res.json(await selectContentItemVariant({ itemId, variantId: body.variantId }));
+  })
+);
+
+router.post(
+  '/content-items/:id/select-visual-preset',
+  asyncHandler(async (req, res) => {
+    const itemId = z.string().parse(req.params.id);
+    const body = selectVisualPresetSchema.parse(req.body ?? {});
+    res.json(await selectContentItemVisualPreset({ itemId, preset: body.preset }));
+  })
+);
+
+router.post(
+  '/content-items/:id/schedule',
+  asyncHandler(async (req, res) => {
+    const itemId = z.string().parse(req.params.id);
+    const body = contentItemScheduleSchema.parse(req.body ?? {});
+    res.json(
+      await scheduleContentItem({
+        itemId,
+        scheduledFor: body.scheduledFor,
+        platforms: body.platforms,
+        operatorEmail: req.operator?.email || env.OPERATOR_EMAIL
+      })
+    );
+  })
+);
+
+router.post(
+  '/content-items/:id/publish-now',
+  asyncHandler(async (req, res) => {
+    const itemId = z.string().parse(req.params.id);
+    res.json(await publishContentItemNow({ itemId, operatorEmail: req.operator?.email || env.OPERATOR_EMAIL }));
+  })
+);
+
+router.post(
+  '/content-items/:id/archive',
+  asyncHandler(async (req, res) => {
+    const itemId = z.string().parse(req.params.id);
+    const body = archiveContentItemSchema.parse(req.body ?? {});
+    res.json(await archiveContentItem({ itemId, reason: body.reason }));
+  })
+);
+
+router.get(
+  '/calendar',
+  asyncHandler(async (_req, res) => {
+    res.json(await getCalendarView());
+  })
+);
+
+router.get(
+  '/performance',
+  asyncHandler(async (_req, res) => {
+    res.json(await getPerformanceView());
+  })
+);
+
+router.get(
+  '/library',
+  asyncHandler(async (_req, res) => {
+    res.json(await getLibraryView());
+  })
+);
+
+router.get(
+  '/growth-loops',
+  asyncHandler(async (_req, res) => {
+    res.json(await getGrowthLoopsView());
+  })
+);
+
+router.get(
+  '/system-health',
+  asyncHandler(async (_req, res) => {
+    res.json(await getSystemHealth());
+  })
+);
+
+router.get(
+  '/media/diagnostics',
+  asyncHandler(async (_req, res) => {
+    res.json(await getMediaDiagnostics());
+  })
+);
 
 router.get(
   '/dashboard',
@@ -570,6 +830,7 @@ router.post(
       targetType: 'post',
       postId: body.postId
     });
+    await markPostMediaQueued(body.postId, String(job.id));
 
     res.status(202).json({
       message: 'Media generation queued',
@@ -587,6 +848,7 @@ router.post(
       targetType: 'post',
       postId
     });
+    await markPostMediaQueued(postId, String(job.id));
 
     res.status(202).json({
       message: 'Media generation queued',

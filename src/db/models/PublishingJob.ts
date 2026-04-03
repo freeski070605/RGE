@@ -8,6 +8,11 @@ const PublishingJobSchema = new Schema(
       required: true,
       index: true
     },
+    contentItemId: {
+      type: Schema.Types.ObjectId,
+      ref: 'ContentItem',
+      index: true
+    },
     platform: {
       type: String,
       required: true,
@@ -27,7 +32,11 @@ const PublishingJobSchema = new Schema(
     },
     mediaSnapshot: {
       imagePath: String,
-      videoPath: String
+      videoPath: String,
+      imagePublicUrl: String,
+      videoPublicUrl: String,
+      imageRemoteUrl: String,
+      videoRemoteUrl: String
     },
     providerResponse: {
       type: Schema.Types.Mixed,

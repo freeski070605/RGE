@@ -8,90 +8,254 @@ export type OperatorSessionResponse = {
   operator: OperatorRecord;
 };
 
-export type EventRecord = {
-  id: string;
-  eventType: string;
-  playerId: string;
-  amount: number;
-  turns: number;
-  streak: number;
-  tableAmount: number;
-  status: string;
-  source: string;
-  metadata?: Record<string, unknown>;
-  createdAt: string;
+export type OperatorSettingsRecord = {
+  operatorEmail: string;
+  mode: 'autopilot' | 'assisted' | 'manual';
+  approvedPlatforms: string[];
+  approvedFormats: string[];
+  avoidNarrativeRepeatHours: number;
+  updatedAt: string | null;
 };
 
-export type PostAnalytics = {
+export type OpportunityRecord = {
   id: string;
-  clicks: number;
-  signups: number;
-  deposits: number;
-  engagement: {
+  title: string;
+  headline: string;
+  opportunityType: string;
+  whyItMatters: string;
+  whyAmISeeingThis: string;
+  recommendedContentAngle: string;
+  recommendedFormat: string;
+  recommendedPlatforms: string[];
+  urgency: string;
+  confidenceScore: number;
+  estimatedValue: number;
+  freshness: string;
+  sourceSignals: Array<{
+    id: string;
+    type: string;
+    player: string;
+    tableName: string;
+    occurredAt: string;
+    amount: number;
+  }>;
+  operatorStatus: string;
+  contentItem: { id: string; stage: string } | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ContentItemRecord = {
+  id: string;
+  title: string;
+  opportunityType: string;
+  whyItMatters: string;
+  strategyAngle: string;
+  recommendationWhy: string;
+  hookDirection: string;
+  recommendedFormat: string;
+  recommendedPlatforms: string[];
+  templateRecommendation: string;
+  selectedVisualPreset: string;
+  urgency: string;
+  confidenceScore: number;
+  estimatedValue: number;
+  operatorMode: 'autopilot' | 'assisted' | 'manual';
+  stage: string;
+  stageLabel: string;
+  needsAttention: boolean;
+  reviewNotes: string[];
+  createdBy: string;
+  sourceOpportunity: {
+    id: string;
+    headline: string;
+    whyItMatters: string;
+    whyThisRecommendation: string;
+  } | null;
+  sourceSignals: Array<{
+    id: string;
+    signalType: string;
+    playerId: string;
+    username: string;
+    tableName: string;
+    amount: number;
+    stake: number;
+    occurredAt: string;
+    scores: Record<string, number>;
+  }>;
+  brief: {
+    id: string;
+    platform: string;
+    format: string;
+    tone: string;
+    objective: string;
+    hookDirection: string;
+    cta: string;
+    notes: string[];
+    createdAt: string;
+    updatedAt: string;
+  } | null;
+  variants: Array<{
+    id: string;
+    variantLabel: string;
+    hook: string;
+    caption: string;
+    hashtags: string[];
+    overlayText: string;
+    cta: string;
+    tone: string;
+    hookStyle: string;
+    status: string;
+    media: {
+      status: string;
+      imageUrl: string | null;
+      videoUrl: string | null;
+      imagePath: string | null;
+      videoPath: string | null;
+      errorMessage: string | null;
+      lastFinishedAt: string | null;
+    };
+    createdAt: string;
+    updatedAt: string;
+  }>;
+  selectedVariantId: string | null;
+  selectedVariant: ContentItemRecord['variants'][number] | null;
+  selectedAssets: Array<{
+    id: string;
+    kind: string;
+    title: string;
+    preferredUrl: string | null;
+  }>;
+  publishingJobs: Array<{
+    id: string;
+    platform: string;
+    status: string;
+    scheduledFor: string | null;
+    publishedAt: string | null;
+    errorMessage: string | null;
+    mediaPreviewUrl: string | null;
+    insight: {
+      clicks: number;
+      signups: number;
+      deposits: number;
+      likes: number;
+      comments: number;
+      shares: number;
+      saves: number;
+      impressions: number;
+      performanceScore: number;
+    } | null;
+  }>;
+  schedule: {
+    status: string;
+    scheduledFor: string | null;
+    publishedAt: string | null;
+    bestTimeWindow: string | null;
+    lastError: string | null;
+  };
+  analyticsSummary: {
+    clicks: number;
+    signups: number;
+    deposits: number;
     likes: number;
     comments: number;
     shares: number;
     saves: number;
     impressions: number;
+    performanceScore: number;
+    baselineDelta: number;
+    conversionInfluence: number;
+    trend: string;
+    updatedAt: string | null;
   };
-  latestPlatformMetrics: Record<string, unknown>;
-  performanceScore: number;
-};
-
-export type PostRecord = {
-  id: string;
-  event: EventRecord | null;
-  assets: AssetRecord[];
-  platforms: string[];
-  caption: string;
-  captionOptions: string[];
-  hook: string;
-  hashtags: string[];
-  cta: string;
-  overlayText: string;
-  aiMetadata: {
-    model?: string;
-    promptVersion?: string;
-    strategyNotes?: string[];
-  };
-  media: {
-    status: string;
-    imagePath: string | null;
-    videoPath: string | null;
-    imageUrl: string | null;
-    videoUrl: string | null;
-  };
-  schedule: {
-    status: string;
-    scheduledFor: string | null;
-    publishedAt: string | null;
-    lastAttemptAt: string | null;
-    providerResponse: Record<string, unknown>;
-    errorMessage: string | null;
-  };
-  analytics: PostAnalytics | null;
   createdAt: string;
   updatedAt: string;
 };
 
-export type AssetRecord = {
+export type PostRecord = {
   id: string;
-  originalName?: string;
-  storedFilename?: string;
-  kind: string;
-  mimeType?: string;
-  fileSize?: number;
-  title: string;
-  tags: string[];
-  editorStatus: string;
-  lastEditPreset?: string | null;
-  lastEditOverlay?: string | null;
-  originalUrl: string | null;
-  editedUrl: string | null;
-  preferredUrl: string | null;
-  metadata?: Record<string, unknown>;
-  createdAt: string;
-  updatedAt?: string;
+  platforms: string[];
+  hook: string;
+  caption: string;
+  media: {
+    status: string;
+  };
+  schedule: {
+    status: string;
+  };
+  event: {
+    playerId?: string;
+    eventType?: string;
+  } | null;
+  analytics: {
+    performanceScore: number;
+  } | null;
+};
+
+export type PipelineView = {
+  columns: Array<{
+    id: string;
+    label: string;
+    items: ContentItemRecord[];
+  }>;
+  items: ContentItemRecord[];
+  counts: Record<string, number>;
+};
+
+export type CalendarView = {
+  entries: Array<{
+    id: string;
+    title: string;
+    platformBadges: string[];
+    status: string;
+    opportunityType: string;
+    scheduledFor: string | null;
+    publishedAt: string | null;
+  }>;
+  days: Array<{
+    date: string;
+    items: CalendarView['entries'];
+  }>;
+};
+
+export type PerformanceView = {
+  totals: {
+    engagement: number;
+    clicks: number;
+    signups: number;
+    deposits: number;
+    conversionInfluence: number;
+  };
+  bestPerformers: ContentItemRecord[];
+  underperforming: ContentItemRecord[];
+  bestHooks: Array<{ label: string; count: number }>;
+  bestFormats: Array<{ label: string; count: number }>;
+  bestStoryTypes: Array<{ label: string; count: number }>;
+  bestPublishWindows: Array<{ label: string; count: number }>;
+  recommendations: {
+    instructions: string;
+    winningHookStyles: string[];
+    winningContentTypes: string[];
+    winningAssetTypes: string[];
+  };
+};
+
+export type LibraryView = {
+  assets: Array<{
+    id: string;
+    title: string;
+    kind: string;
+    tags: string[];
+    editorStatus: string;
+    preferredUrl: string | null;
+  }>;
+  visualPresets: Array<{ id: string; name: string; description: string }>;
+  overlays: string[];
+  templates: Array<{ id: string; name: string; description: string }>;
+  hookPatterns: Array<{ id: string; hook: string }>;
+  ctaTemplates: Array<{ id: string; cta: string }>;
+  brandVoicePresets: Array<{ id: string; name: string }>;
+  reusableCaptionComponents: string[];
 };
 
 export type ReferralRecord = {
@@ -112,310 +276,94 @@ export type ReferralRecord = {
   updatedAt: string;
 };
 
-export type DashboardSummary = {
-  headline: {
-    totalPosts: number;
-    totalEvents: number;
-    totalReferrals: number;
+export type GrowthLoopsView = {
+  summary: {
+    referralCodes: number;
+    totalInvites: number;
+    totalRewarded: number;
     totalWalletCreditsAwarded: number;
-    totalAssets: number;
   };
-  totals: {
+  referrals: ReferralRecord[];
+};
+
+export type HealthBlock = {
+  status: string;
+  detail: string;
+  error?: string;
+  counts?: Record<string, number>;
+  path?: string;
+  backendApiBaseUrl?: string;
+  ffmpegPath?: string;
+};
+
+export type SystemHealthView = {
+  backendConnectivity: HealthBlock;
+  intelligenceSync: HealthBlock & { lastSyncTime?: string | null };
+  mongo: HealthBlock;
+  redis: HealthBlock;
+  workerHealth: Array<{
+    workerName: string;
+    queueName: string;
+    status: string;
+    lastHeartbeatAt: string;
+  }>;
+  mediaQueue: HealthBlock;
+  publishingQueue: HealthBlock;
+  assetsDirectory: HealthBlock;
+  mediaOutputDirectory: HealthBlock;
+  lastSyncTime: string | null;
+  lastSuccessfulMediaRenderTime: string | null;
+  mediaDiagnostics: MediaDiagnosticsView;
+};
+
+export type MediaDiagnosticsView = {
+  queue: HealthBlock;
+  ffmpeg: HealthBlock;
+  canvas: HealthBlock;
+  outputDirectories: {
+    media: HealthBlock;
+    assets: HealthBlock;
+  };
+  lastSuccess: string | null;
+  lastFailure: {
+    at: string | null;
+    reason: string | null;
+  };
+};
+
+export type CommandCenterView = {
+  topOpportunitiesToday: OpportunityRecord[];
+  needsReview: ContentItemRecord[];
+  readyToScheduleOrPublish: ContentItemRecord[];
+  upcomingScheduledContent: ContentItemRecord[];
+  recentPerformanceSnapshot: Array<{
+    id: string;
+    title: string;
+    stage: string;
+    performanceScore: number;
     clicks: number;
     signups: number;
-    deposits: number;
-    engagement: number;
-  };
-  pipeline: Record<string, number>;
-  latestPosts: PostRecord[];
-  recentEvents: EventRecord[];
-  topReferrals: ReferralRecord[];
-  recentAssets: AssetRecord[];
+  }>;
+  underperforming: ContentItemRecord[];
+  systemHealth: SystemHealthView;
 };
 
-export type AnalyticsDashboard = {
-  totals: {
-    clicks: number;
-    signups: number;
-    deposits: number;
-    likes: number;
-    comments: number;
-    shares: number;
-    saves: number;
-    impressions: number;
-  };
-  recentPosts: PostRecord[];
-  analytics: PostAnalytics[];
-  strategy: {
-    instructions: string;
-    winningHooks: string[];
-    winningHashtags: string[];
-    summary: {
-      averageEngagementScore: number;
-      reviewedPosts: number;
-    };
-  };
-};
-
-export type PlayerSnapshotRecord = {
+export type AssetRecord = {
   id: string;
-  date: string;
-  window: '24h' | '7d' | '30d';
-  playerId: string;
-  username: string;
-  vipStatus: string;
-  matchesPlayed: number;
-  wins: number;
-  reems: number;
-  netPayout: number;
-  biggestPayout: number;
-  depositAmount: number;
-  currentWinStreak: number;
-  bestWinStreak: number;
-};
-
-export type LeaderboardRecord = {
-  id: string;
-  metric: string;
-  window: '24h' | '7d' | '30d';
+  originalName?: string;
+  storedFilename?: string;
+  kind: string;
+  mimeType?: string;
+  fileSize?: number;
   title: string;
-  description: string;
-  generatedAt: string;
-  rankings: Array<{
-    rank: number;
-    playerId: string;
-    username: string;
-    value: number;
-    secondaryValue?: number;
-    metadata?: Record<string, unknown>;
-  }>;
-};
-
-export type SignalRecord = {
-  id: string;
-  signalType: string;
-  sourceType: string;
-  sourceId: string;
-  playerId?: string;
-  username?: string;
-  tableId?: string;
-  tableName?: string;
-  matchId?: string;
-  mode?: string;
-  stake?: number;
-  amount?: number;
-  occurredAt: string;
-  window: '24h' | '7d' | '30d';
-  metadata: Record<string, unknown>;
-  scores: {
-    noveltyScore: number;
-    performancePotentialScore: number;
-    brandFitScore: number;
-    urgencyScore: number;
-    overallPriorityScore: number;
-  };
-  recommendedPlatforms: string[];
-  status: string;
-};
-
-export type ContentIdeaRecord = {
-  id: string;
-  ideaType: string;
-  goal: string;
-  audience: string;
-  platformRecommendation: string[];
-  priorityScore: number;
-  headline: string;
-  reason: string;
-  hookAngle: string;
-  ctaAngle: string;
-  linkedPlayers: string[];
-  linkedAssets: string[];
-  campaignTags: string[];
-  signalCount: number;
-  status: string;
+  tags: string[];
+  editorStatus: string;
+  lastEditPreset?: string | null;
+  lastEditOverlay?: string | null;
+  originalUrl: string | null;
+  editedUrl: string | null;
+  preferredUrl: string | null;
+  metadata?: Record<string, unknown>;
   createdAt: string;
-  updatedAt: string;
-};
-
-export type CreativeBriefRecord = {
-  id: string;
-  contentIdeaId: string;
-  ideaHeadline: string;
-  objective: string;
-  audience: string;
-  platform: string;
-  format: string;
-  tone: string;
-  hookDirection: string;
-  cta: string;
-  requiredAssetKinds: string[];
-  assetIds: string[];
-  assets: Array<{
-    id: string;
-    kind: string;
-    title: string;
-    preferredUrl: string | null;
-  }>;
-  notes: string[];
-  generationPrompt: string;
-  status: string;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type ContentVariantRecord = {
-  id: string;
-  creativeBriefId: string;
-  variantLabel: string;
-  hook: string;
-  caption: string;
-  hashtags: string[];
-  overlayText: string;
-  cta: string;
-  tone: string;
-  hookStyle: string;
-  media: {
-    status: string;
-    imagePath: string | null;
-    videoPath: string | null;
-    imageUrl: string | null;
-    videoUrl: string | null;
-  };
-  assetIds: string[];
-  assets: Array<{
-    id: string;
-    kind: string;
-    title: string;
-    preferredUrl: string | null;
-  }>;
-  brief: {
-    id: string;
-    platform: string;
-    format: string;
-    tone: string;
-    objective: string;
-    ideaHeadline: string;
-  } | null;
-  aiMetadata: {
-    model?: string;
-    promptVersion?: string;
-    strategyNotes?: string[];
-  };
-  status: string;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type PublishingJobRecord = {
-  id: string;
-  contentVariantId: string;
-  platform: string;
-  scheduledFor: string | null;
-  publishedAt: string | null;
-  status: string;
-  captionSnapshot: string;
-  mediaSnapshot: {
-    imageUrl: string | null;
-    videoUrl: string | null;
-  };
-  providerResponse: Record<string, unknown>;
-  errorMessage: string | null;
-  variant: {
-    id: string;
-    variantLabel: string;
-    hook: string;
-  } | null;
-  insight: {
-    clicks: number;
-    signups: number;
-    deposits: number;
-    likes: number;
-    comments: number;
-    shares: number;
-    saves: number;
-    impressions: number;
-    performanceScore: number;
-  } | null;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type GrowthInsightsDashboard = {
-  totals: {
-    clicks: number;
-    signups: number;
-    deposits: number;
-    likes: number;
-    comments: number;
-    shares: number;
-    saves: number;
-    impressions: number;
-  };
-  topJobs: Array<{
-    id: string;
-    platform: string;
-    status: string;
-    scheduledFor: string | null;
-    publishedAt: string | null;
-  }>;
-  topIdeas: ContentIdeaRecord[];
-  strategy: {
-    instructions: string;
-    winningHookStyles: string[];
-    winningContentTypes: string[];
-    winningAssetTypes: string[];
-  };
-  bestPerformers: Array<{
-    id: string;
-    publishingJobId: string;
-    platform: string;
-    contentType: string;
-    assetType: string;
-    hookStyle: string;
-    performanceScore: number;
-  }>;
-};
-
-export type GrowthDashboard = {
-  headline: {
-    totalIdeas: number;
-    totalBriefs: number;
-    totalVariants: number;
-    totalPublishingJobs: number;
-  };
-  strategy: {
-    instructions: string;
-    winningHookStyles: string[];
-    winningContentTypes: string[];
-    winningAssetTypes: string[];
-  };
-  todayQueue: ContentIdeaRecord[];
-  signalInbox: Array<{
-    id: string;
-    signalType: string;
-    username?: string;
-    priorityScore: number;
-    amount?: number;
-    occurredAt: string;
-    status: string;
-  }>;
-  briefs: CreativeBriefRecord[];
-  variants: ContentVariantRecord[];
-  publishingJobs: PublishingJobRecord[];
-  insights: GrowthInsightsDashboard;
-};
-
-export type ImplementationSpec = {
-  system: {
-    name: string;
-    workflow: string[];
-  };
-  mongoSchemas: Array<{
-    collection: string;
-    fields: string[];
-  }>;
-  apiRoutes: string[];
-  dashboardScreens: string[];
-  workerFlow: string[];
+  updatedAt?: string;
 };

@@ -3,6 +3,7 @@ import { ContentIdeaModel } from '../../db/models/ContentIdea';
 import { GameSignalModel } from '../../db/models/GameSignal';
 import { LeaderboardSnapshotModel } from '../../db/models/LeaderboardSnapshot';
 import { PlayerStatsDailyModel } from '../../db/models/PlayerStatsDaily';
+import { buildOpportunityDraftFromSignal, isOperatorFacingSignal } from '../operator/opportunityRules';
 import { AppError } from '../../utils/errors';
 
 type WindowKey = '24h' | '7d' | '30d';
@@ -89,14 +90,29 @@ const fetchBackendFeed = async (days = env.RGE_SYNC_DAYS): Promise<BackendFeed> 
     headers['x-rge-token'] = env.BACKEND_INTERNAL_TOKEN;
   }
 
-  const response = await fetch(`${env.BACKEND_API_BASE_URL.replace(/\/+$/, '')}/api/rge/feed?days=${days}`, {
-    method: 'GET',
-    headers
-  });
+  const backendBaseUrl = env.BACKEND_API_BASE_URL.replace(/\/+$/, '');
+  let response: Response;
+
+  try {
+    response = await fetch(`${backendBaseUrl}/api/rge/feed?days=${days}`, {
+      method: 'GET',
+      headers,
+      signal: AbortSignal.timeout(env.BACKEND_HEALTH_TIMEOUT_MS)
+    });
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : 'Unknown backend sync error';
+    throw new AppError(
+      `Failed to reach the live ReemTeam backend feed at ${backendBaseUrl}. Check BACKEND_API_BASE_URL, BACKEND_INTERNAL_TOKEN, and backend availability. ${detail}`,
+      502
+    );
+  }
 
   if (!response.ok) {
     const message = await response.text();
-    throw new AppError(`Failed to sync backend intelligence feed: ${message || response.statusText}`, response.status);
+    throw new AppError(
+      `Failed to sync the live ReemTeam backend feed at ${backendBaseUrl}: ${message || response.statusText}`,
+      response.status
+    );
   }
 
   return (await response.json()) as BackendFeed;
@@ -109,61 +125,6 @@ const scoreSignal = (signal: BackendFeed['signals'][number]) => ({
   urgencyScore: signal.scores?.urgencyScore ?? 50,
   overallPriorityScore: signal.scores?.overallPriorityScore ?? 50
 });
-
-const buildIdeaDraftFromSignal = (signal: BackendFeed['signals'][number]) => {
-  const score = scoreSignal(signal).overallPriorityScore;
-  const player = signal.username || signal.playerId || 'ReemTeam player';
-  const headlineByType: Record<string, string> = {
-    reem_moment: `${player} just landed a reem worth talking about`,
-    big_payout: `${player} pulled one of the biggest payouts on the board`,
-    high_stakes_win: `${player} closed out a high-stakes table`,
-    win_streak: `${player} is running the table on a win streak`,
-    vip_win: `${player} is making VIP look loud`,
-    deposit_momentum: `${player} is back in action with fresh table momentum`,
-    referral_momentum: `${player} is bringing new energy into ReemTeam`
-  };
-
-  const goal =
-    signal.signalType === 'deposit_momentum'
-      ? 'conversion'
-      : signal.signalType === 'referral_momentum'
-        ? 'referral'
-        : 'engagement';
-
-  const ideaType =
-    signal.signalType.startsWith('leaderboard_')
-      ? 'leaderboard'
-      : signal.signalType === 'referral_momentum'
-        ? 'community'
-        : signal.signalType === 'deposit_momentum'
-          ? 'social_proof'
-          : 'game_highlight';
-
-  return {
-    ideaType,
-    goal,
-    audience: goal === 'conversion' ? 'active_players' : 'social_audience',
-    platformRecommendation: signal.recommendedPlatforms?.length ? signal.recommendedPlatforms : ['instagram'],
-    priorityScore: score,
-    headline: headlineByType[signal.signalType] || `${player} created a moment worth posting`,
-    reason: `${signal.signalType} scored ${Math.round(score)} based on game impact, urgency, and platform fit.`,
-    hookAngle:
-      signal.signalType === 'win_streak'
-        ? 'Lean into momentum and inevitability.'
-        : signal.signalType.startsWith('leaderboard_')
-          ? 'Frame it as proof of dominance and community status.'
-          : 'Open with the outcome, then reveal the amount or stakes.',
-    ctaAngle:
-      goal === 'conversion'
-        ? 'Drive players back into tables now.'
-        : goal === 'referral'
-          ? 'Invite the audience to bring a friend into the next session.'
-          : 'Push for comments, shares, and anticipation.',
-    linkedPlayers: signal.playerId ? [signal.playerId] : [],
-    campaignTags: [signal.window, signal.signalType],
-    status: 'proposed' as const
-  };
-};
 
 export const syncGameIntelligence = async (days = env.RGE_SYNC_DAYS) => {
   const feed = await fetchBackendFeed(days);
@@ -269,9 +230,9 @@ export const syncGameIntelligence = async (days = env.RGE_SYNC_DAYS) => {
 
   const signalsNeedingIdeas = eligibleSignals.filter((signal) => !coveredSignalIds.has(String(signal._id)));
   const ideaDocs = signalsNeedingIdeas
-    .filter((signal) => !coveredSignalIds.has(String(signal._id)))
+    .filter((signal) => !coveredSignalIds.has(String(signal._id)) && isOperatorFacingSignal(signal.signalType))
     .map((signal) => ({
-      ...buildIdeaDraftFromSignal({
+      ...buildOpportunityDraftFromSignal({
         signalType: signal.signalType,
         sourceType: signal.sourceType,
         sourceId: signal.sourceId,
@@ -290,7 +251,8 @@ export const syncGameIntelligence = async (days = env.RGE_SYNC_DAYS) => {
         recommendedPlatforms: signal.recommendedPlatforms
       }),
       signalIds: [signal._id]
-    }));
+    }))
+    .filter(Boolean);
 
   if (ideaDocs.length) {
     await ContentIdeaModel.insertMany(ideaDocs);
