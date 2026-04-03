@@ -2,6 +2,7 @@ import { AnalyticsModel } from '../../db/models/Analytics';
 import { AssetModel } from '../../db/models/Asset';
 import { EventModel } from '../../db/models/Event';
 import { PostModel } from '../../db/models/Post';
+import { normalizeMediaStatus } from '../../utils/mediaStatus';
 import { ReferralModel } from '../../db/models/Referral';
 import { toAssetUrl, toMediaUrl } from '../../utils/publicPaths';
 
@@ -59,7 +60,7 @@ const serializePost = (post: any, analytics?: any) => ({
   overlayText: post.overlayText ?? '',
   aiMetadata: post.aiMetadata ?? {},
   media: {
-    status: post.media?.status ?? 'pending',
+    status: normalizeMediaStatus(post.media?.status),
     imagePath: post.media?.imagePath ?? null,
     videoPath: post.media?.videoPath ?? null,
     imageUrl: toMediaUrl(post.media?.imagePath),

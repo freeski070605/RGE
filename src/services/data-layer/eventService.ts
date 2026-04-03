@@ -29,9 +29,6 @@ export const createEventAndDraftPost = async (input: CreateEventInput, platforms
     platforms,
     schedule: {
       status: 'draft'
-    },
-    media: {
-      status: 'pending'
     }
   });
 

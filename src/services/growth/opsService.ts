@@ -9,9 +9,12 @@ import { GameSignalModel } from '../../db/models/GameSignal';
 import { PerformanceInsightModel } from '../../db/models/PerformanceInsight';
 import { PublishingJobModel } from '../../db/models/PublishingJob';
 import { AppError } from '../../utils/errors';
+import { isCompletedMediaStatus, normalizeMediaStatus } from '../../utils/mediaStatus';
+import { getDurationMs, logError, logInfo, logWarn } from '../../utils/structuredLogger';
 import { toAbsoluteAppUrl, toAssetUrl, toMediaUrl } from '../../utils/publicPaths';
 import { renderCreativeImage, renderCreativeVideo } from '../media-engine/mediaEngine';
 import { publishToSocialPlatform } from '../social/socialPublisher';
+import { assertStoredArtifact } from '../storage/storageService';
 
 const openaiClient = env.OPENAI_API_KEY
   ? new OpenAI({
@@ -55,14 +58,6 @@ const normalizeHashtags = (hashtags: string[]) =>
     .filter(Boolean)
     .map((hashtag) => (hashtag.startsWith('#') ? hashtag : `#${hashtag}`))
     .slice(0, 8);
-
-const normalizeMediaStatus = (status?: string | null) => {
-  if (!status || status === 'ready') {
-    return status === 'ready' ? 'succeeded' : 'pending';
-  }
-
-  return status;
-};
 
 const resolveMediaPreviewUrl = (input: {
   remoteUrl?: string | null;
@@ -645,6 +640,7 @@ export const markVariantMediaFailed = async (variantId: string, message: string,
 };
 
 export const createMediaForVariant = async (variantId: string) => {
+  const startedAt = Date.now();
   const variant = await ContentVariantModel.findById(variantId).populate({
     path: 'creativeBriefId',
     populate: {
@@ -664,6 +660,15 @@ export const createMediaForVariant = async (variantId: string) => {
     idea
   );
 
+  logInfo({
+    area: 'media',
+    action: 'render-variant-media',
+    status: 'started',
+    variantId: String(variant._id),
+    contentItemId: variant.contentItemId ? String(variant.contentItemId) : null,
+    message: 'Starting variant media generation'
+  });
+
   const image = await renderCreativeImage({
     id: `variant-${String(variant._id)}`,
     hook: variant.hook,
@@ -671,6 +676,11 @@ export const createMediaForVariant = async (variantId: string) => {
     overlayText: variant.overlayText || variant.hook,
     hashtags: variant.hashtags ?? [],
     backgroundImagePath: preferredImagePath
+  });
+  await assertStoredArtifact({
+    localPath: image.localPath,
+    publicUrl: image.publicUrl,
+    label: `Variant ${variant._id} image`
   });
 
   let video:
@@ -683,14 +693,28 @@ export const createMediaForVariant = async (variantId: string) => {
         id: `variant-${String(variant._id)}`,
         sourceVideoPath: preferredVideoPath
       });
+      await assertStoredArtifact({
+        localPath: video.localPath,
+        publicUrl: video.publicUrl,
+        label: `Variant ${variant._id} video`
+      });
     } catch (error) {
-      console.warn(`Video generation failed for variant ${variant._id}:`, error);
+      logWarn({
+        area: 'media',
+        action: 'render-variant-video',
+        status: 'warning',
+        variantId: String(variant._id),
+        contentItemId: variant.contentItemId ? String(variant.contentItemId) : null,
+        durationMs: getDurationMs(startedAt),
+        error: error instanceof Error ? error.message : 'Video generation failed',
+        message: 'Video generation failed; image output remains available'
+      });
     }
   }
 
   variant.media = {
     ...(variant.media ?? {}),
-    status: 'succeeded',
+    status: 'completed',
     imagePath: image.localPath,
     videoPath: video?.localPath,
     imagePublicUrl: image.publicUrl,
@@ -702,6 +726,16 @@ export const createMediaForVariant = async (variantId: string) => {
   } as never;
   variant.status = 'ready';
   await variant.save();
+
+  logInfo({
+    area: 'media',
+    action: 'render-variant-media',
+    status: 'completed',
+    variantId: String(variant._id),
+    contentItemId: variant.contentItemId ? String(variant.contentItemId) : null,
+    durationMs: getDurationMs(startedAt),
+    message: 'Variant media generation completed'
+  });
 
   return serializeVariant(variant.toObject(), brief?.toObject?.() ?? brief, idea?.toObject?.() ?? idea, assets);
 };
@@ -758,7 +792,7 @@ export const scheduleVariantPublishing = async (input: {
     throw new AppError('Content variant not found', 404);
   }
 
-  if (normalizeMediaStatus(variant.media?.status) !== 'succeeded' || (!variant.media?.imagePath && !variant.media?.videoPath)) {
+  if (!isCompletedMediaStatus(variant.media?.status) || (!variant.media?.imagePath && !variant.media?.videoPath)) {
     throw new AppError('Create media before scheduling the variant', 409);
   }
 
@@ -818,6 +852,7 @@ export const scheduleVariantPublishing = async (input: {
 };
 
 export const executePublishingJob = async (publishingJobId: string) => {
+  const startedAt = Date.now();
   const job = await PublishingJobModel.findById(publishingJobId).populate({
     path: 'contentVariantId',
     populate: {
@@ -843,6 +878,16 @@ export const executePublishingJob = async (publishingJobId: string) => {
   await job.save();
 
   try {
+    logInfo({
+      area: 'publishing',
+      action: 'execute-publishing-job',
+      status: 'started',
+      publishingJobId: String(job._id),
+      contentItemId: job.contentItemId ? String(job.contentItemId) : null,
+      variantId: variant ? String(variant._id) : null,
+      message: 'Publishing job started'
+    });
+
     const publishableMediaUrl =
       resolvePublishableMediaUrl({
         remoteUrl: job.mediaSnapshot?.videoRemoteUrl,
@@ -873,11 +918,32 @@ export const executePublishingJob = async (publishingJobId: string) => {
     await ContentIdeaModel.findByIdAndUpdate(idea?._id, { status: 'published' });
 
     const insight = await ensurePublishingJobInsight(job, variant, brief, idea);
+    logInfo({
+      area: 'publishing',
+      action: 'execute-publishing-job',
+      status: 'completed',
+      publishingJobId: String(job._id),
+      contentItemId: job.contentItemId ? String(job.contentItemId) : null,
+      variantId: variant ? String(variant._id) : null,
+      durationMs: getDurationMs(startedAt),
+      message: 'Publishing job completed'
+    });
     return serializePublishingJob(job.toObject(), variant.toObject(), insight.toObject());
   } catch (error) {
     job.status = 'failed';
     job.errorMessage = error instanceof Error ? error.message : 'Publishing failed';
     await job.save();
+    logError({
+      area: 'publishing',
+      action: 'execute-publishing-job',
+      status: 'failed',
+      publishingJobId: String(job._id),
+      contentItemId: job.contentItemId ? String(job.contentItemId) : null,
+      variantId: variant ? String(variant._id) : null,
+      durationMs: getDurationMs(startedAt),
+      error: error instanceof Error ? error.message : 'Publishing failed',
+      message: 'Publishing job failed'
+    });
     throw error;
   }
 };

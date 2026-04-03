@@ -13,7 +13,7 @@ import {
   clearOperatorSession
 } from '../services/auth/operatorAuthService';
 import { getAnalyticsDashboard, recordAnalyticsDelta } from '../services/analytics/analyticsService';
-import { attachAssetsToPost, autoEditAsset, createAssetRecord, listAssets } from '../services/assets/assetService';
+import { attachAssetsToPost, autoEditAsset, createAssetRecord, deleteAsset, listAssets } from '../services/assets/assetService';
 import {
   getDashboardSummary,
   getPostById,
@@ -71,6 +71,8 @@ import { getOperatorSettings, updateOperatorSettings } from '../services/operato
 import { markPostMediaQueued } from '../services/media-engine/mediaEngine';
 import { getImplementationSpec } from '../services/spec/implementationSpecService';
 import { getMediaDiagnostics, getSystemHealth } from '../services/system/systemHealthService';
+import { getSystemIntegrity } from '../services/system/systemIntegrityService';
+import { getWorkersStatus } from '../services/system/workerStatusService';
 import { asyncHandler } from '../utils/asyncHandler';
 import { AppError } from '../utils/errors';
 
@@ -504,6 +506,20 @@ router.get(
 );
 
 router.get(
+  '/system-integrity',
+  asyncHandler(async (_req, res) => {
+    res.json(await getSystemIntegrity());
+  })
+);
+
+router.get(
+  '/workers/status',
+  asyncHandler(async (_req, res) => {
+    res.json(await getWorkersStatus());
+  })
+);
+
+router.get(
   '/media/diagnostics',
   asyncHandler(async (_req, res) => {
     res.json(await getMediaDiagnostics());
@@ -786,6 +802,14 @@ router.post(
       id: String(asset._id),
       message: 'Asset auto-edited successfully'
     });
+  })
+);
+
+router.delete(
+  '/assets/:assetId',
+  asyncHandler(async (req, res) => {
+    const assetId = z.string().parse(req.params.assetId);
+    res.json(await deleteAsset(assetId));
   })
 );
 

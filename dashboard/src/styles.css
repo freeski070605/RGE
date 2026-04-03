@@ -231,6 +231,101 @@ select {
   font-size: clamp(2rem, 3vw, 3.6rem);
 }
 
+.hero__copy,
+.hero__glossary {
+  display: grid;
+  gap: 1rem;
+}
+
+.hero__meta-label,
+.workflow-ribbon__step span {
+  display: inline-block;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.72rem;
+  color: var(--accent);
+}
+
+.hero__glossary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.term-pill {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+  padding: 0.85rem 0.95rem;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.term-pill strong,
+.workflow-ribbon__step strong {
+  font-family: 'Space Grotesk', 'Trebuchet MS', sans-serif;
+}
+
+.help-hint {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--muted);
+  cursor: help;
+}
+
+.help-hint:focus-visible {
+  outline: 2px solid rgba(45, 212, 191, 0.45);
+  outline-offset: 2px;
+}
+
+.help-hint__bubble {
+  position: absolute;
+  top: calc(100% + 0.65rem);
+  right: 0;
+  width: min(18rem, 76vw);
+  padding: 0.85rem;
+  border-radius: 18px;
+  border: 1px solid rgba(45, 212, 191, 0.18);
+  background: rgba(3, 10, 16, 0.96);
+  box-shadow: 0 24px 48px rgba(1, 8, 14, 0.4);
+  display: grid;
+  gap: 0.35rem;
+  opacity: 0;
+  transform: translateY(-6px);
+  pointer-events: none;
+  transition: opacity 180ms ease, transform 180ms ease;
+  z-index: 12;
+}
+
+.help-hint:hover .help-hint__bubble,
+.help-hint:focus .help-hint__bubble,
+.help-hint:focus-within .help-hint__bubble {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.help-hint__bubble strong {
+  color: var(--text);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.72rem;
+}
+
+.help-hint__bubble span {
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
 .hero__chip-grid {
   display: grid;
   gap: 0.85rem;
@@ -264,6 +359,269 @@ select {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 1rem;
+}
+
+.workflow-ribbon {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.status-bar,
+.assistant-checklist,
+.next-best-action,
+.section-guide,
+.workflow-tracker,
+.failure-banner,
+.issue-card,
+.empty-state {
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.status-bar {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.status-bar__item {
+  border-radius: var(--radius-lg);
+  padding: 0.9rem 1rem;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.workflow-ribbon__step {
+  position: relative;
+  overflow: hidden;
+  padding: 1rem;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--line);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.03)),
+    rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  text-align: left;
+  display: grid;
+  gap: 0.45rem;
+  cursor: pointer;
+}
+
+.workflow-ribbon__step::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 2px;
+  background: linear-gradient(90deg, rgba(45, 212, 191, 0.85), rgba(244, 182, 95, 0.85));
+  opacity: 0.7;
+}
+
+.workflow-ribbon__icon {
+  width: 2.1rem;
+  height: 2.1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid rgba(125, 211, 167, 0.16);
+  background: rgba(125, 211, 167, 0.08);
+  color: var(--accent);
+}
+
+.status-bar__item span,
+.assistant-checklist__step span,
+.workflow-step span {
+  display: block;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.76rem;
+}
+
+.status-bar__item strong,
+.assistant-checklist__step strong,
+.workflow-step strong {
+  display: block;
+  margin-top: 0.35rem;
+  font-family: 'Space Grotesk', 'Trebuchet MS', sans-serif;
+  font-size: 1.2rem;
+}
+
+.workflow-ribbon__step strong {
+  display: block;
+  font-size: 1rem;
+}
+
+.workflow-ribbon__step p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+  font-size: 0.9rem;
+}
+
+.next-best-action,
+.assistant-checklist,
+.section-guide,
+.failure-banner,
+.empty-state,
+.issue-card {
+  border-radius: var(--radius-lg);
+  padding: 1rem;
+}
+
+.next-best-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.next-best-action h3,
+.assistant-checklist h3,
+.empty-state strong {
+  margin: 0;
+  font-family: 'Space Grotesk', 'Trebuchet MS', sans-serif;
+}
+
+.next-best-action--danger {
+  border-color: rgba(251, 113, 133, 0.28);
+  background: rgba(251, 113, 133, 0.08);
+}
+
+.next-best-action--warning {
+  border-color: rgba(244, 182, 95, 0.28);
+  background: rgba(244, 182, 95, 0.08);
+}
+
+.next-best-action--accent {
+  border-color: rgba(45, 212, 191, 0.28);
+  background: rgba(45, 212, 191, 0.08);
+}
+
+.assistant-checklist {
+  display: grid;
+  gap: 1rem;
+}
+
+.assistant-checklist__steps,
+.workflow-tracker {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.assistant-checklist__steps {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.assistant-checklist__step,
+.workflow-step {
+  border-radius: 18px;
+  padding: 0.9rem;
+}
+
+.section-guide {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.35rem 0.8rem;
+  margin-bottom: 1rem;
+}
+
+.section-guide strong {
+  color: var(--text);
+}
+
+.section-guide span,
+.empty-state p,
+.issue-card p {
+  color: var(--muted);
+  margin: 0;
+}
+
+.empty-state {
+  display: grid;
+  gap: 0.8rem;
+  place-items: start;
+}
+
+.empty-state--compact {
+  padding: 0.9rem;
+}
+
+.workflow-tracker {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.workflow-step {
+  color: var(--text);
+  text-align: left;
+}
+
+.workflow-ribbon__step,
+.status-bar__item,
+.opportunity-card,
+.opportunity-compact,
+.kanban-card,
+.pipeline-row,
+.preset-card {
+  transition: transform 180ms ease, border-color 180ms ease, background 180ms ease, box-shadow 180ms ease;
+}
+
+.workflow-ribbon__step:hover,
+.status-bar__item:hover,
+.opportunity-card:hover,
+.opportunity-compact:hover,
+.kanban-card:hover,
+.pipeline-row:hover,
+.preset-card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(125, 211, 167, 0.28);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.workflow-step--completed {
+  background: rgba(134, 239, 172, 0.12);
+  border: 1px solid rgba(134, 239, 172, 0.2);
+}
+
+.workflow-step--active {
+  background: rgba(45, 212, 191, 0.12);
+  border: 1px solid rgba(45, 212, 191, 0.2);
+}
+
+.workflow-step--failed {
+  background: rgba(251, 113, 133, 0.13);
+  border: 1px solid rgba(251, 113, 133, 0.22);
+}
+
+.workflow-step--current {
+  background: rgba(158, 177, 197, 0.12);
+  border: 1px solid rgba(158, 177, 197, 0.2);
+}
+
+.failure-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-color: rgba(251, 113, 133, 0.28);
+  background: rgba(251, 113, 133, 0.08);
+}
+
+.issue-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.panel__action {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
 }
 
 .stat-card {
@@ -303,6 +661,12 @@ select {
 .primary-button {
   background: linear-gradient(135deg, #0ea5a4, #22c55e);
   color: #051014;
+}
+
+.mini-button--danger {
+  background: rgba(251, 113, 133, 0.13);
+  color: #ffd0d7;
+  border-color: rgba(251, 113, 133, 0.22);
 }
 
 .stat-card--success .stat-card__icon {
@@ -681,6 +1045,11 @@ select:focus {
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+.detail-block--next {
+  border-color: rgba(45, 212, 191, 0.2);
+  background: rgba(45, 212, 191, 0.08);
+}
+
 .detail-media img,
 .detail-media video {
   width: 100%;
@@ -896,6 +1265,12 @@ select:focus {
   letter-spacing: 0.08em;
 }
 
+.health-tile strong {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.96rem;
+}
+
 .kanban-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
@@ -1012,6 +1387,11 @@ select:focus {
   .hero,
   .split-grid,
   .stats-grid,
+  .workflow-ribbon,
+  .status-bar,
+  .assistant-checklist__steps,
+  .hero__glossary-grid,
+  .workflow-tracker,
   .post-card__grid,
   .leaderboard-grid,
   .variant-grid,
@@ -1025,6 +1405,13 @@ select:focus {
   .sidebar {
     position: relative;
     top: auto;
+  }
+
+  .next-best-action,
+  .failure-banner,
+  .issue-card {
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .field-grid--two,
@@ -1053,6 +1440,7 @@ select:focus {
   .post-card__actions,
   .post-card__top,
   .panel__header,
+  .panel__action,
   .referral-row,
   .timeline-item,
   .leaderboard__item,
@@ -1074,5 +1462,12 @@ select:focus {
 
   .schedule-inline input {
     min-width: 0;
+  }
+
+  .panel__action,
+  .ghost-button,
+  .primary-button,
+  .mini-button {
+    width: 100%;
   }
 }

@@ -5,6 +5,7 @@ import { LeaderboardSnapshotModel } from '../../db/models/LeaderboardSnapshot';
 import { PlayerStatsDailyModel } from '../../db/models/PlayerStatsDaily';
 import { buildOpportunityDraftFromSignal, isOperatorFacingSignal } from '../operator/opportunityRules';
 import { AppError } from '../../utils/errors';
+import { getDurationMs, logError, logInfo } from '../../utils/structuredLogger';
 
 type WindowKey = '24h' | '7d' | '30d';
 
@@ -127,155 +128,187 @@ const scoreSignal = (signal: BackendFeed['signals'][number]) => ({
 });
 
 export const syncGameIntelligence = async (days = env.RGE_SYNC_DAYS) => {
-  const feed = await fetchBackendFeed(days);
+  const startedAt = Date.now();
+  logInfo({
+    area: 'sync',
+    action: 'sync-game-intelligence',
+    status: 'started',
+    message: 'Starting live backend intelligence sync',
+    days
+  });
 
-  const playerOperations = feed.players.flatMap((player) =>
-    feed.windows.map((window) => ({
-      updateOne: {
-        filter: {
-          date: feed.statsDate,
-          window,
-          playerId: player.playerId
-        },
-        update: {
-          $set: {
+  try {
+    const feed = await fetchBackendFeed(days);
+
+    const playerOperations = feed.players.flatMap((player) =>
+      feed.windows.map((window) => ({
+        updateOne: {
+          filter: {
             date: feed.statsDate,
             window,
-            playerId: player.playerId,
-            username: player.username,
-            vipStatus: player.vipStatus,
-            ...player.windows[window],
-            metadata: {
-              vipSince: player.vipSince
+            playerId: player.playerId
+          },
+          update: {
+            $set: {
+              date: feed.statsDate,
+              window,
+              playerId: player.playerId,
+              username: player.username,
+              vipStatus: player.vipStatus,
+              ...player.windows[window],
+              metadata: {
+                vipSince: player.vipSince
+              }
             }
-          }
-        },
-        upsert: true
-      }
-    }))
-  );
+          },
+          upsert: true
+        }
+      }))
+    );
 
-  if (playerOperations.length) {
-    await PlayerStatsDailyModel.bulkWrite(playerOperations);
-  }
+    if (playerOperations.length) {
+      await PlayerStatsDailyModel.bulkWrite(playerOperations);
+    }
 
-  await Promise.all(
-    feed.leaderboards.map((leaderboard) =>
-      LeaderboardSnapshotModel.findOneAndUpdate(
-        {
-          metric: leaderboard.metric,
-          window: leaderboard.window
-        },
-        {
-          $set: {
+    await Promise.all(
+      feed.leaderboards.map((leaderboard) =>
+        LeaderboardSnapshotModel.findOneAndUpdate(
+          {
             metric: leaderboard.metric,
             window: leaderboard.window,
-            title: leaderboard.title,
-            description: leaderboard.description,
-            generatedAt: new Date(feed.generatedAt),
-            rankings: leaderboard.rankings
-          }
-        },
-        { upsert: true, new: true }
-      )
-    )
-  );
-
-  await Promise.all(
-    feed.signals.map((signal) =>
-      GameSignalModel.findOneAndUpdate(
-        {
-          signalType: signal.signalType,
-          sourceType: signal.sourceType,
-          sourceId: signal.sourceId
-        },
-        {
-          $setOnInsert: {
-            status: 'new' as const
           },
-          $set: {
+          {
+            $set: {
+              metric: leaderboard.metric,
+              window: leaderboard.window,
+              title: leaderboard.title,
+              description: leaderboard.description,
+              generatedAt: new Date(feed.generatedAt),
+              rankings: leaderboard.rankings
+            }
+          },
+          { upsert: true, new: true }
+        )
+      )
+    );
+
+    await Promise.all(
+      feed.signals.map((signal) =>
+        GameSignalModel.findOneAndUpdate(
+          {
             signalType: signal.signalType,
             sourceType: signal.sourceType,
-            sourceId: signal.sourceId,
-            playerId: signal.playerId,
-            username: signal.username,
-            tableId: signal.tableId,
-            tableName: signal.tableName,
-            matchId: signal.matchId,
-            mode: signal.mode,
-            stake: signal.stake,
-            amount: signal.amount,
-            occurredAt: new Date(signal.occurredAt),
-            window: signal.window,
-            metadata: signal.metadata ?? {},
-            scores: scoreSignal(signal),
-            recommendedPlatforms: signal.recommendedPlatforms?.length ? signal.recommendedPlatforms : ['instagram']
-          }
-        },
-        { upsert: true, new: true }
+            sourceId: signal.sourceId
+          },
+          {
+            $setOnInsert: {
+              status: 'new' as const
+            },
+            $set: {
+              signalType: signal.signalType,
+              sourceType: signal.sourceType,
+              sourceId: signal.sourceId,
+              playerId: signal.playerId,
+              username: signal.username,
+              tableId: signal.tableId,
+              tableName: signal.tableName,
+              matchId: signal.matchId,
+              mode: signal.mode,
+              stake: signal.stake,
+              amount: signal.amount,
+              occurredAt: new Date(signal.occurredAt),
+              window: signal.window,
+              metadata: signal.metadata ?? {},
+              scores: scoreSignal(signal),
+              recommendedPlatforms: signal.recommendedPlatforms?.length ? signal.recommendedPlatforms : ['instagram']
+            }
+          },
+          { upsert: true, new: true }
+        )
       )
-    )
-  );
-
-  const existingIdeas = await ContentIdeaModel.find()
-    .select('signalIds')
-    .lean();
-  const coveredSignalIds = new Set(existingIdeas.flatMap((idea: any) => (idea.signalIds ?? []).map((id: any) => String(id))));
-
-  const eligibleSignals = await GameSignalModel.find({
-    status: { $in: ['new', 'ranked'] }
-  })
-    .sort({ 'scores.overallPriorityScore': -1, occurredAt: -1 })
-    .limit(40);
-
-  const signalsNeedingIdeas = eligibleSignals.filter((signal) => !coveredSignalIds.has(String(signal._id)));
-  const ideaDocs = signalsNeedingIdeas
-    .filter((signal) => !coveredSignalIds.has(String(signal._id)) && isOperatorFacingSignal(signal.signalType))
-    .map((signal) => ({
-      ...buildOpportunityDraftFromSignal({
-        signalType: signal.signalType,
-        sourceType: signal.sourceType,
-        sourceId: signal.sourceId,
-        playerId: signal.playerId ?? undefined,
-        username: signal.username ?? undefined,
-        tableId: signal.tableId ?? undefined,
-        tableName: signal.tableName ?? undefined,
-        matchId: signal.matchId ?? undefined,
-        mode: signal.mode ?? undefined,
-        stake: signal.stake ?? undefined,
-        amount: signal.amount ?? undefined,
-        occurredAt: signal.occurredAt.toISOString(),
-        window: signal.window as WindowKey,
-        metadata: (signal.metadata as Record<string, unknown>) ?? {},
-        scores: signal.scores as Record<string, number>,
-        recommendedPlatforms: signal.recommendedPlatforms
-      }),
-      signalIds: [signal._id]
-    }))
-    .filter(Boolean);
-
-  if (ideaDocs.length) {
-    await ContentIdeaModel.insertMany(ideaDocs);
-    await GameSignalModel.updateMany(
-      {
-        _id: { $in: signalsNeedingIdeas.map((signal) => signal._id) }
-      },
-      {
-        $set: {
-          status: 'idea_created'
-        }
-      }
     );
-  }
 
-  return {
-    syncedAt: new Date().toISOString(),
-    summary: feed.summary,
-    upsertedPlayerSnapshots: playerOperations.length,
-    upsertedLeaderboards: feed.leaderboards.length,
-    upsertedSignals: feed.signals.length,
-    createdIdeas: ideaDocs.length
-  };
+    const existingIdeas = await ContentIdeaModel.find()
+      .select('signalIds')
+      .lean();
+    const coveredSignalIds = new Set(existingIdeas.flatMap((idea: any) => (idea.signalIds ?? []).map((id: any) => String(id))));
+
+    const eligibleSignals = await GameSignalModel.find({
+      status: { $in: ['new', 'ranked'] }
+    })
+      .sort({ 'scores.overallPriorityScore': -1, occurredAt: -1 })
+      .limit(40);
+
+    const signalsNeedingIdeas = eligibleSignals.filter((signal) => !coveredSignalIds.has(String(signal._id)));
+    const ideaDocs = signalsNeedingIdeas
+      .filter((signal) => !coveredSignalIds.has(String(signal._id)) && isOperatorFacingSignal(signal.signalType))
+      .map((signal) => ({
+        ...buildOpportunityDraftFromSignal({
+          signalType: signal.signalType,
+          sourceType: signal.sourceType,
+          sourceId: signal.sourceId,
+          playerId: signal.playerId ?? undefined,
+          username: signal.username ?? undefined,
+          tableId: signal.tableId ?? undefined,
+          tableName: signal.tableName ?? undefined,
+          matchId: signal.matchId ?? undefined,
+          mode: signal.mode ?? undefined,
+          stake: signal.stake ?? undefined,
+          amount: signal.amount ?? undefined,
+          occurredAt: signal.occurredAt.toISOString(),
+          window: signal.window as WindowKey,
+          metadata: (signal.metadata as Record<string, unknown>) ?? {},
+          scores: signal.scores as Record<string, number>,
+          recommendedPlatforms: signal.recommendedPlatforms
+        }),
+        signalIds: [signal._id]
+      }))
+      .filter(Boolean);
+
+    if (ideaDocs.length) {
+      await ContentIdeaModel.insertMany(ideaDocs);
+      await GameSignalModel.updateMany(
+        {
+          _id: { $in: signalsNeedingIdeas.map((signal) => signal._id) }
+        },
+        {
+          $set: {
+            status: 'idea_created'
+          }
+        }
+      );
+    }
+
+    const result = {
+      syncedAt: new Date().toISOString(),
+      summary: feed.summary,
+      upsertedPlayerSnapshots: playerOperations.length,
+      upsertedLeaderboards: feed.leaderboards.length,
+      upsertedSignals: feed.signals.length,
+      createdIdeas: ideaDocs.length
+    };
+
+    logInfo({
+      area: 'sync',
+      action: 'sync-game-intelligence',
+      status: 'completed',
+      durationMs: getDurationMs(startedAt),
+      message: 'Live backend intelligence sync completed',
+      ...result
+    });
+
+    return result;
+  } catch (error) {
+    logError({
+      area: 'sync',
+      action: 'sync-game-intelligence',
+      status: 'failed',
+      durationMs: getDurationMs(startedAt),
+      error: error instanceof Error ? error.message : 'Live backend sync failed',
+      message: 'Live backend intelligence sync failed'
+    });
+    throw error;
+  }
 };
 
 export const listPlayerSnapshots = async (input?: { window?: WindowKey; limit?: number }) => {

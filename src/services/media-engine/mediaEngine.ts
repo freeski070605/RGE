@@ -3,8 +3,10 @@ import { CanvasRenderingContext2D, createCanvas, loadImage } from 'canvas';
 import { env } from '../../config/env';
 import { PostModel } from '../../db/models/Post';
 import { AppError } from '../../utils/errors';
+import { getDurationMs, logInfo, logWarn } from '../../utils/structuredLogger';
 import { getPreferredAssetForPost } from '../assets/assetService';
 import {
+  assertStoredArtifact,
   createTempFilePath,
   removeTempFile,
   uploadBufferToStorage,
@@ -192,7 +194,7 @@ export const markPostMediaQueued = async (postId: string, jobId?: string | null)
     return null;
   }
 
-  const media = post.media ?? ((post.media = { status: 'pending' } as never), post.media);
+  const media = post.media ?? ((post.media = {} as never), post.media);
   media.status = 'queued';
   media.jobId = jobId ?? media.jobId;
   media.errorMessage = undefined;
@@ -207,7 +209,7 @@ export const markPostMediaProcessing = async (postId: string, jobId?: string | n
     return null;
   }
 
-  const media = post.media ?? ((post.media = { status: 'pending' } as never), post.media);
+  const media = post.media ?? ((post.media = {} as never), post.media);
   media.status = 'processing';
   media.jobId = jobId ?? media.jobId;
   media.errorMessage = undefined;
@@ -222,7 +224,7 @@ export const markPostMediaFailed = async (postId: string, message: string, jobId
     return null;
   }
 
-  const media = post.media ?? ((post.media = { status: 'pending' } as never), post.media);
+  const media = post.media ?? ((post.media = {} as never), post.media);
   const schedule = post.schedule ?? ((post.schedule = { status: 'draft' } as never), post.schedule);
 
   media.status = 'failed';
@@ -236,6 +238,7 @@ export const markPostMediaFailed = async (postId: string, message: string, jobId
 };
 
 export const createMediaForPost = async (postId: string) => {
+  const startedAt = Date.now();
   const post = await PostModel.findById(postId);
   if (!post) {
     throw new AppError('Post not found', 404);
@@ -248,6 +251,14 @@ export const createMediaForPost = async (postId: string) => {
   const preferredImageAsset = await getPreferredAssetForPost(String(post._id), 'image');
   const preferredVideoAsset = await getPreferredAssetForPost(String(post._id), 'video');
 
+  logInfo({
+    area: 'media',
+    action: 'render-post-media',
+    status: 'started',
+    postId: String(post._id),
+    message: 'Starting post media generation'
+  });
+
   const image = await renderCreativeImage({
     id: String(post._id),
     hook: post.hook,
@@ -255,6 +266,11 @@ export const createMediaForPost = async (postId: string) => {
     overlayText: post.overlayText || post.hook,
     hashtags: post.hashtags,
     backgroundImagePath: preferredImageAsset?.path
+  });
+  await assertStoredArtifact({
+    localPath: image.localPath,
+    publicUrl: image.publicUrl,
+    label: `Post ${post._id} image`
   });
 
   let video:
@@ -267,15 +283,28 @@ export const createMediaForPost = async (postId: string) => {
         id: String(post._id),
         sourceVideoPath: preferredVideoAsset?.path
       });
+      await assertStoredArtifact({
+        localPath: video.localPath,
+        publicUrl: video.publicUrl,
+        label: `Post ${post._id} video`
+      });
     } catch (error) {
-      console.warn(`Video generation failed for post ${post._id}:`, error);
+      logWarn({
+        area: 'media',
+        action: 'render-post-video',
+        status: 'warning',
+        postId: String(post._id),
+        durationMs: getDurationMs(startedAt),
+        error: error instanceof Error ? error.message : 'Video generation failed',
+        message: 'Video generation failed; image output remains available'
+      });
     }
   }
 
-  const media = post.media ?? ((post.media = { status: 'pending' } as never), post.media);
+  const media = post.media ?? ((post.media = {} as never), post.media);
   const schedule = post.schedule ?? ((post.schedule = { status: 'draft' } as never), post.schedule);
 
-  media.status = 'succeeded';
+  media.status = 'completed';
   media.imagePath = image.localPath;
   media.imagePublicUrl = image.publicUrl;
   media.imageRemoteUrl = image.remoteUrl ?? undefined;
@@ -287,6 +316,15 @@ export const createMediaForPost = async (postId: string) => {
   schedule.status = 'media_ready';
   schedule.errorMessage = undefined;
   await post.save();
+
+  logInfo({
+    area: 'media',
+    action: 'render-post-media',
+    status: 'completed',
+    postId: String(post._id),
+    durationMs: getDurationMs(startedAt),
+    message: 'Post media generation completed'
+  });
 
   return post;
 };

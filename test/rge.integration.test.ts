@@ -17,6 +17,9 @@ type ModuleBag = {
   closeQueues: () => Promise<void>;
   processMediaJobData: (job: { id?: string; data: { targetType: 'variant'; variantId: string } }) => Promise<void>;
   ContentVariantModel: any;
+  ContentItemModel: any;
+  CreativeBriefModel: any;
+  ContentIdeaModel: any;
   AssetModel: any;
   WorkerHeartbeatModel: any;
   mongoose: typeof import('mongoose');
@@ -184,6 +187,9 @@ before(async () => {
   const { closeQueues } = await import('../src/queues');
   const { processMediaJobData } = await import('../src/workers/mediaWorker');
   const { ContentVariantModel } = await import('../src/db/models/ContentVariant');
+  const { ContentItemModel } = await import('../src/db/models/ContentItem');
+  const { CreativeBriefModel } = await import('../src/db/models/CreativeBrief');
+  const { ContentIdeaModel } = await import('../src/db/models/ContentIdea');
   const { AssetModel } = await import('../src/db/models/Asset');
   const { WorkerHeartbeatModel } = await import('../src/db/models/WorkerHeartbeat');
 
@@ -195,6 +201,9 @@ before(async () => {
     closeQueues,
     processMediaJobData,
     ContentVariantModel,
+    ContentItemModel,
+    CreativeBriefModel,
+    ContentIdeaModel,
     AssetModel,
     WorkerHeartbeatModel,
     mongoose: mongoose.default
@@ -246,7 +255,7 @@ test('sync creates operator-facing opportunities and the content item lifecycle 
   });
 
   const refreshed = await apiJson(`/api/content-items/${item.id}`);
-  assert.equal((refreshed.payload as any).selectedVariant.media.status, 'succeeded');
+  assert.equal((refreshed.payload as any).selectedVariant.media.status, 'completed');
   assert.ok((refreshed.payload as any).selectedVariant.media.imageUrl);
 
   const approved = await apiJson(`/api/content-items/${item.id}/approve`, { method: 'POST' });
@@ -265,6 +274,11 @@ test('sync creates operator-facing opportunities and the content item lifecycle 
   const imageUrl = (refreshed.payload as any).selectedVariant.media.imageUrl;
   const mediaResponse = await fetch(imageUrl.startsWith('http') ? imageUrl : `${baseUrl}${imageUrl}`);
   assert.equal(mediaResponse.status, 200);
+
+  const integrity = await apiJson('/api/system-integrity');
+  assert.equal((integrity.payload as any).mediaPipeline.output, 'ok');
+  assert.equal((integrity.payload as any).mediaPipeline.serving, 'ok');
+  assert.ok((integrity.payload as any).lastSuccessfulMediaJob);
 });
 
 test('media worker persists failure details when an attached asset path is invalid', async () => {
@@ -300,6 +314,69 @@ test('media worker persists failure details when an attached asset path is inval
   const failedVariant = await modules.ContentVariantModel.findById(item.selectedVariantId).lean();
   assert.equal(failedVariant.media.status, 'failed');
   assert.ok(failedVariant.media.errorMessage);
+
+  const integrity = await apiJson('/api/system-integrity');
+  assert.equal((integrity.payload as any).lastFailedMediaJob !== null, true);
+  assert.equal(
+    (integrity.payload as any).issues.some((issue: any) =>
+      ['media_failure_missing_reason', 'media_processing_unhealthy'].includes(issue.code) || issue.summary.includes('media')
+    ),
+    true
+  );
+});
+
+test('asset deletion removes library files and linked references safely', async () => {
+  const { item } = await seedOpportunityAndCreateItem();
+
+  const originalPath = path.join(modules.env.assetOriginalDir, 'delete-me.png');
+  const editedPath = path.join(modules.env.assetEditedDir, 'delete-me-edited.png');
+  await fs.writeFile(originalPath, 'original-file');
+  await fs.writeFile(editedPath, 'edited-file');
+
+  const asset = await modules.AssetModel.create({
+    originalName: 'delete-me.png',
+    storedFilename: 'delete-me.png',
+    kind: 'image',
+    mimeType: 'image/png',
+    fileSize: 12,
+    title: 'Delete Me',
+    tags: ['cleanup'],
+    originalPath,
+    editedPath,
+    editorStatus: 'edited'
+  });
+
+  const contentItem = await modules.ContentItemModel.findById(item.id);
+  const variant = await modules.ContentVariantModel.findById(item.selectedVariantId);
+  const brief = await modules.CreativeBriefModel.findById(contentItem.briefId);
+  const idea = await modules.ContentIdeaModel.findById(contentItem.sourceOpportunityId);
+
+  await Promise.all([
+    modules.ContentItemModel.findByIdAndUpdate(item.id, { $set: { selectedMediaAssetIds: [asset._id] } }),
+    modules.ContentVariantModel.findByIdAndUpdate(item.selectedVariantId, { $set: { assetIds: [asset._id] } }),
+    modules.CreativeBriefModel.findByIdAndUpdate(brief._id, { $set: { assetIds: [asset._id] } }),
+    modules.ContentIdeaModel.findByIdAndUpdate(idea._id, { $set: { linkedAssets: [asset._id] } })
+  ]);
+
+  const response = await apiJson(`/api/assets/${asset._id}`, { method: 'DELETE' });
+  assert.equal(response.status, 200);
+  assert.equal((response.payload as any).id, String(asset._id));
+
+  const [deletedAsset, updatedItem, updatedVariant, updatedBrief, updatedIdea] = await Promise.all([
+    modules.AssetModel.findById(asset._id).lean(),
+    modules.ContentItemModel.findById(item.id).lean(),
+    modules.ContentVariantModel.findById(item.selectedVariantId).lean(),
+    modules.CreativeBriefModel.findById(brief._id).lean(),
+    modules.ContentIdeaModel.findById(idea._id).lean()
+  ]);
+
+  assert.equal(deletedAsset, null);
+  assert.equal((updatedItem.selectedMediaAssetIds ?? []).length, 0);
+  assert.equal((updatedVariant.assetIds ?? []).length, 0);
+  assert.equal((updatedBrief.assetIds ?? []).length, 0);
+  assert.equal((updatedIdea.linkedAssets ?? []).length, 0);
+  assert.equal(await fs.stat(originalPath).catch(() => null), null);
+  assert.equal(await fs.stat(editedPath).catch(() => null), null);
 });
 
 test('system health and diagnostics surface backend, redis, ffmpeg, and stale worker failures clearly', async () => {
@@ -320,5 +397,15 @@ test('system health and diagnostics surface backend, redis, ffmpeg, and stale wo
   assert.equal(health.backendConnectivity.status, 'down');
   assert.equal(health.redis.status, 'down');
   assert.equal(health.mediaDiagnostics.ffmpeg.status, 'down');
-  assert.equal(health.workerHealth[0].status, 'degraded');
+  assert.equal(health.workerHealth[0].status, 'down');
+
+  const workers = await apiJson('/api/workers/status');
+  assert.equal((workers.payload as any).summary.status, 'error');
+  assert.equal((workers.payload as any).workers.media.status, 'error');
+
+  const integrity = await apiJson('/api/system-integrity');
+  assert.equal((integrity.payload as any).backendConnection, 'error');
+  assert.equal((integrity.payload as any).redis, 'error');
+  assert.equal((integrity.payload as any).workers.media, 'error');
+  assert.equal((integrity.payload as any).issues.some((issue: any) => issue.code === 'backend_connection_down'), true);
 });

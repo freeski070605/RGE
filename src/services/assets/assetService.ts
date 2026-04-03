@@ -3,10 +3,15 @@ import fs from 'fs/promises';
 import { Types } from 'mongoose';
 import { createCanvas, loadImage } from 'canvas';
 import { AssetModel } from '../../db/models/Asset';
+import { ContentIdeaModel } from '../../db/models/ContentIdea';
+import { ContentItemModel } from '../../db/models/ContentItem';
+import { ContentVariantModel } from '../../db/models/ContentVariant';
+import { CreativeBriefModel } from '../../db/models/CreativeBrief';
 import { PostModel } from '../../db/models/Post';
 import { env } from '../../config/env';
 import { AppError } from '../../utils/errors';
 import { toAssetUrl } from '../../utils/publicPaths';
+import { logInfo } from '../../utils/structuredLogger';
 import {
   createTempFilePath,
   removeTempFile,
@@ -350,5 +355,48 @@ export const getPreferredAssetForPost = async (postId: string, kind?: 'image' | 
     path: getPreferredAssetPath(match),
     kind: match.kind,
     title: match.title ?? ''
+  };
+};
+
+export const deleteAsset = async (assetId: string) => {
+  const asset = await AssetModel.findById(assetId);
+  if (!asset) {
+    throw new AppError('Asset not found', 404);
+  }
+
+  const assetObjectId = new Types.ObjectId(assetId);
+
+  const [posts, ideas, briefs, variants, contentItems] = await Promise.all([
+    PostModel.updateMany({ assetIds: assetObjectId }, { $pull: { assetIds: assetObjectId } }),
+    ContentIdeaModel.updateMany({ linkedAssets: assetObjectId }, { $pull: { linkedAssets: assetObjectId } }),
+    CreativeBriefModel.updateMany({ assetIds: assetObjectId }, { $pull: { assetIds: assetObjectId } }),
+    ContentVariantModel.updateMany({ assetIds: assetObjectId }, { $pull: { assetIds: assetObjectId } }),
+    ContentItemModel.updateMany({ selectedMediaAssetIds: assetObjectId }, { $pull: { selectedMediaAssetIds: assetObjectId } })
+  ]);
+
+  await AssetModel.findByIdAndDelete(assetObjectId);
+  await Promise.all([removeTempFile(asset.originalPath), removeTempFile(asset.editedPath)]);
+
+  const removedReferences = {
+    posts: posts.modifiedCount ?? 0,
+    opportunities: ideas.modifiedCount ?? 0,
+    briefs: briefs.modifiedCount ?? 0,
+    variants: variants.modifiedCount ?? 0,
+    contentItems: contentItems.modifiedCount ?? 0
+  };
+
+  logInfo({
+    area: 'content',
+    action: 'delete-asset',
+    status: 'completed',
+    message: 'Asset deleted from the library',
+    assetId,
+    removedReferences
+  });
+
+  return {
+    id: assetId,
+    title: asset.title ?? asset.originalName,
+    removedReferences
   };
 };

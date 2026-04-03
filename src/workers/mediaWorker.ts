@@ -15,33 +15,89 @@ import {
 } from '../services/media-engine/mediaEngine';
 import { maybeAutoScheduleContentItemFromVariant } from '../services/operator/contentItemService';
 import { startWorkerHeartbeat } from '../services/system/workerHeartbeatService';
+import { getDurationMs, logError, logInfo } from '../utils/structuredLogger';
 
 export const processMediaJobData = async (
   job: { id?: string | number | null; data: { targetType: 'post'; postId: string } | { targetType: 'variant'; variantId: string } }
 ) => {
+  const startedAt = Date.now();
   const jobId = job.id != null ? String(job.id) : null;
 
   if (job.data.targetType === 'variant') {
+    logInfo({
+      area: 'media',
+      action: 'process-media-job',
+      status: 'started',
+      jobId,
+      variantId: job.data.variantId,
+      message: 'Variant media job picked up by worker'
+    });
     await markVariantMediaProcessing(job.data.variantId, jobId);
     try {
       await createMediaForVariant(job.data.variantId);
       await maybeAutoScheduleContentItemFromVariant(job.data.variantId);
+      logInfo({
+        area: 'media',
+        action: 'process-media-job',
+        status: 'completed',
+        jobId,
+        variantId: job.data.variantId,
+        durationMs: getDurationMs(startedAt),
+        message: 'Variant media job completed'
+      });
     } catch (error) {
       await markVariantMediaFailed(
         job.data.variantId,
         error instanceof Error ? error.message : 'Media render failed',
         jobId
       );
+      logError({
+        area: 'media',
+        action: 'process-media-job',
+        status: 'failed',
+        jobId,
+        variantId: job.data.variantId,
+        durationMs: getDurationMs(startedAt),
+        error: error instanceof Error ? error.message : 'Media render failed',
+        message: 'Variant media job failed'
+      });
       throw error;
     }
     return;
   }
 
+  logInfo({
+    area: 'media',
+    action: 'process-media-job',
+    status: 'started',
+    jobId,
+    postId: job.data.postId,
+    message: 'Post media job picked up by worker'
+  });
   await markPostMediaProcessing(job.data.postId, jobId);
   try {
     await createMediaForPost(job.data.postId);
+    logInfo({
+      area: 'media',
+      action: 'process-media-job',
+      status: 'completed',
+      jobId,
+      postId: job.data.postId,
+      durationMs: getDurationMs(startedAt),
+      message: 'Post media job completed'
+    });
   } catch (error) {
     await markPostMediaFailed(job.data.postId, error instanceof Error ? error.message : 'Media render failed', jobId);
+    logError({
+      area: 'media',
+      action: 'process-media-job',
+      status: 'failed',
+      jobId,
+      postId: job.data.postId,
+      durationMs: getDurationMs(startedAt),
+      error: error instanceof Error ? error.message : 'Media render failed',
+      message: 'Post media job failed'
+    });
     throw error;
   }
 };

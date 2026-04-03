@@ -59,8 +59,7 @@ const PostSchema = new Schema(
     media: {
       status: {
         type: String,
-        enum: ['pending', 'queued', 'processing', 'succeeded', 'ready', 'failed'],
-        default: 'pending'
+        enum: ['pending', 'queued', 'processing', 'completed', 'succeeded', 'ready', 'failed']
       },
       imagePath: String,
       videoPath: String,

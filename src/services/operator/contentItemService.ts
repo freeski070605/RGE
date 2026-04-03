@@ -16,6 +16,8 @@ import {
 } from '../growth/opsService';
 import { getOperatorSettings } from './settingsService';
 import { AppError } from '../../utils/errors';
+import { isActiveMediaStatus, isCompletedMediaStatus, isFailedMediaStatus, normalizeMediaStatus } from '../../utils/mediaStatus';
+import { logInfo, logWarn } from '../../utils/structuredLogger';
 import { toAssetUrl, toMediaUrl } from '../../utils/publicPaths';
 
 const supportedStageOrder = [
@@ -91,7 +93,7 @@ const serializeVariant = (variant: any) =>
         hookStyle: variant.hookStyle ?? '',
         status: variant.status,
         media: {
-          status: variant.media?.status === 'ready' ? 'succeeded' : variant.media?.status ?? 'pending',
+          status: normalizeMediaStatus(variant.media?.status),
           imageUrl: resolveMediaUrl(variant.media, 'image'),
           videoUrl: resolveMediaUrl(variant.media, 'video'),
           imagePath: variant.media?.imagePath ?? null,
@@ -204,7 +206,7 @@ const deriveStage = (input: {
     return 'approved';
   }
 
-  if (input.selectedVariant?.media?.status === 'succeeded' || input.selectedVariant?.media?.status === 'ready') {
+  if (isCompletedMediaStatus(input.selectedVariant?.media?.status)) {
     return 'needs_review';
   }
 
@@ -218,7 +220,7 @@ const deriveStage = (input: {
 const chooseSelectedVariant = (variants: any[]) =>
   variants.find((variant) => variant.status === 'published') ||
   variants.find((variant) => variant.status === 'scheduled') ||
-  variants.find((variant) => variant.media?.status === 'succeeded' || variant.media?.status === 'ready') ||
+  variants.find((variant) => isCompletedMediaStatus(variant.media?.status)) ||
   variants[0] ||
   null;
 
@@ -586,9 +588,12 @@ const validateSchedulingGuardrails = async (input: {
     throw new AppError('One or more target platforms are not approved in operator settings', 409);
   }
 
-  const mediaStatus = input.selectedVariant.media?.status === 'ready' ? 'succeeded' : input.selectedVariant.media?.status;
-  if (mediaStatus !== 'succeeded') {
+  if (!isCompletedMediaStatus(input.selectedVariant.media?.status)) {
     throw new AppError('Media must finish generating before the content item can be scheduled or published', 409);
+  }
+
+  if (input.selectedVariant.media?.errorMessage) {
+    throw new AppError(`Resolve media errors before publishing: ${input.selectedVariant.media.errorMessage}`, 409);
   }
 
   const repeatCutoff = new Date(Date.now() - input.settings.avoidNarrativeRepeatHours * 60 * 60 * 1000);
@@ -686,6 +691,15 @@ export const createContentItemFromOpportunity = async (input: { opportunityId: s
     await queueMediaForVariant(selectedVariantId);
   }
 
+  logInfo({
+    area: 'content',
+    action: 'create-content-item',
+    status: 'completed',
+    contentItemId: String(item._id),
+    variantId: selectedVariantId,
+    message: 'Content item created from opportunity'
+  });
+
   return getContentItemById(String(item._id));
 };
 
@@ -725,6 +739,15 @@ export const generateContentItemCopy = async (input: { itemId: string; count?: n
     variantIds: variants.map((variant) => variant.id)
   });
 
+  logInfo({
+    area: 'content',
+    action: 'generate-content-item-copy',
+    status: 'completed',
+    contentItemId: String(item._id),
+    variantId: selectedVariantId,
+    message: 'Content item copy generated'
+  });
+
   return getContentItemById(String(item._id));
 };
 
@@ -735,11 +758,43 @@ export const generateContentItemMedia = async (itemId: string) => {
   }
 
   const selectedVariant = await ensureSelectableVariant(itemId);
+  if (isActiveMediaStatus(selectedVariant.media?.status)) {
+    throw new AppError('Media generation is already running for the selected variant', 409);
+  }
+
   await queueMediaForVariant(String(selectedVariant._id));
+  logInfo({
+    area: 'media',
+    action: 'queue-content-item-media',
+    status: 'queued',
+    contentItemId: String(item._id),
+    variantId: String(selectedVariant._id),
+    message: 'Content item media queued'
+  });
   return getContentItemById(itemId);
 };
 
 export const approveContentItem = async (itemId: string) => {
+  const context = await loadContentItemContext(itemId);
+  if (!context.selectedVariant) {
+    throw new AppError('Generate copy before approving this content item', 409);
+  }
+
+  if (isFailedMediaStatus(context.selectedVariant.media?.status)) {
+    throw new AppError(
+      `Fix failed media before approving this item${context.selectedVariant.media?.errorMessage ? `: ${context.selectedVariant.media.errorMessage}` : ''}`,
+      409
+    );
+  }
+
+  const failedPublishingJob = context.publishingJobs.find((job) => job.status === 'failed');
+  if (failedPublishingJob) {
+    throw new AppError(
+      `Resolve failed publishing job before approving this item${failedPublishingJob.errorMessage ? `: ${failedPublishingJob.errorMessage}` : ''}`,
+      409
+    );
+  }
+
   const item = await ContentItemModel.findByIdAndUpdate(
     itemId,
     {
@@ -754,6 +809,15 @@ export const approveContentItem = async (itemId: string) => {
   if (!item) {
     throw new AppError('Content item not found', 404);
   }
+
+  logInfo({
+    area: 'content',
+    action: 'approve-content-item',
+    status: 'completed',
+    contentItemId: String(item._id),
+    variantId: context.selectedVariant ? String(context.selectedVariant._id) : null,
+    message: 'Content item approved'
+  });
 
   return getContentItemById(String(item._id));
 };
@@ -854,6 +918,15 @@ export const scheduleContentItem = async (input: {
     publishingJobIds: jobs.map((job) => job.id)
   });
 
+  logInfo({
+    area: 'publishing',
+    action: 'schedule-content-item',
+    status: 'completed',
+    contentItemId: String(item._id),
+    variantId: String(selectedVariant._id),
+    message: 'Content item scheduled'
+  });
+
   return getContentItemById(String(item._id));
 };
 
@@ -887,6 +960,15 @@ export const publishContentItemNow = async (input: { itemId: string; operatorEma
   await attachLegacyContentItemLinks({
     itemId: String(item._id),
     publishingJobIds: jobs.map((job) => job.id)
+  });
+
+  logInfo({
+    area: 'publishing',
+    action: 'publish-content-item-now',
+    status: 'completed',
+    contentItemId: String(item._id),
+    variantId: String(selectedVariant._id),
+    message: 'Content item published immediately'
   });
 
   return getContentItemById(String(item._id));
@@ -976,6 +1058,15 @@ export const maybeAutoScheduleContentItemFromVariant = async (variantId: string)
       operatorEmail: item.createdBy || 'system'
     });
   } catch (error) {
+    logWarn({
+      area: 'publishing',
+      action: 'autopilot-schedule',
+      status: 'failed',
+      contentItemId: String(item._id),
+      variantId,
+      error: error instanceof Error ? error.message : 'Autopilot scheduling failed',
+      message: 'Autopilot scheduling fell back to manual review'
+    });
     await ContentItemModel.findByIdAndUpdate(item._id, {
       $set: {
         stage: 'needs_review',

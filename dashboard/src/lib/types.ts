@@ -318,17 +318,84 @@ export type SystemHealthView = {
 
 export type MediaDiagnosticsView = {
   queue: HealthBlock;
+  processing: HealthBlock;
+  output: HealthBlock;
+  serving: HealthBlock;
   ffmpeg: HealthBlock;
   canvas: HealthBlock;
   outputDirectories: {
     media: HealthBlock;
     assets: HealthBlock;
   };
+  queueLength: number;
+  activeJobs: number;
+  failedJobs: number;
+  completedJobs: number;
+  averageProcessingTimeMs: number | null;
+  ffmpegAvailable: boolean;
+  canvasAvailable: boolean;
+  outputDirectoryWritable: boolean;
+  assetDirectoryWritable: boolean;
   lastSuccess: string | null;
   lastFailure: {
     at: string | null;
     reason: string | null;
   };
+};
+
+export type WorkersStatusView = {
+  summary: {
+    status: 'ok' | 'error';
+    okCount: number;
+    total: number;
+  };
+  workers: {
+    intelligence: WorkerStatusRecord;
+    content: WorkerStatusRecord;
+    media: WorkerStatusRecord;
+    scheduler: WorkerStatusRecord;
+  };
+};
+
+export type WorkerStatusRecord = {
+  status: 'ok' | 'error';
+  detail: string;
+  workerName: string;
+  queueName: string;
+  lastHeartbeatAt: string | null;
+  heartbeatStatus: string;
+  metadata: Record<string, unknown>;
+};
+
+export type SystemIntegrityView = {
+  backendConnection: 'ok' | 'error';
+  mongo: 'ok' | 'error';
+  redis: 'ok' | 'error';
+  workers: {
+    intelligence: 'ok' | 'error';
+    content: 'ok' | 'error';
+    media: 'ok' | 'error';
+    scheduler: 'ok' | 'error';
+  };
+  mediaPipeline: {
+    queue: 'ok' | 'error';
+    processing: 'ok' | 'error';
+    output: 'ok' | 'error';
+    serving: 'ok' | 'error';
+  };
+  lastSuccessfulMediaJob: string | null;
+  lastFailedMediaJob: string | null;
+  lastSync: string | null;
+  issues: Array<{
+    code: string;
+    severity: 'warning' | 'critical';
+    summary: string;
+    details?: string;
+    entityType?: string;
+    entityId?: string | null;
+    action?: string;
+    detectedAt: string;
+  }>;
 };
 
 export type CommandCenterView = {

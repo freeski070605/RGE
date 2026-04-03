@@ -302,3 +302,27 @@ export const uploadBufferToStorage = async (input: {
     uploadResult
   });
 };
+
+export const assertStoredArtifact = async (input: {
+  localPath?: string | null;
+  publicUrl?: string | null;
+  label: string;
+}) => {
+  if (!input.localPath) {
+    throw new Error(`${input.label} did not produce a local file path`);
+  }
+
+  const stats = await fs.stat(input.localPath).catch(() => null);
+  if (!stats || !stats.isFile() || stats.size <= 0) {
+    throw new Error(`${input.label} file was not written correctly`);
+  }
+
+  if (!input.publicUrl || !input.publicUrl.includes('/')) {
+    throw new Error(`${input.label} did not produce a public URL`);
+  }
+
+  return {
+    ...input,
+    size: stats.size
+  };
+};

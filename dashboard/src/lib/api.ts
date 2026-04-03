@@ -13,7 +13,9 @@ import {
   PerformanceView,
   PipelineView,
   ReferralRecord,
-  SystemHealthView
+  SystemIntegrityView,
+  SystemHealthView,
+  WorkersStatusView
 } from './types';
 
 const api = axios.create({
@@ -63,12 +65,15 @@ export const dashboardApi = {
   updateSettings: async (payload: Partial<Pick<OperatorSettingsRecord, 'mode'>>) =>
     (await api.patch<OperatorSettingsRecord>('/settings', payload)).data,
   getSystemHealth: async () => (await api.get<SystemHealthView>('/system-health')).data,
+  getSystemIntegrity: async () => (await api.get<SystemIntegrityView>('/system-integrity')).data,
+  getWorkersStatus: async () => (await api.get<WorkersStatusView>('/workers/status')).data,
   getMediaDiagnostics: async () => (await api.get<MediaDiagnosticsView>('/media/diagnostics')).data,
   getAssets: async () => (await api.get<AssetRecord[]>('/assets')).data,
   uploadAsset: async (payload: FormData) =>
     (await api.post('/assets/upload', payload, { headers: { 'Content-Type': 'multipart/form-data' } })).data,
   autoEditAsset: async (assetId: string, payload: Record<string, unknown>) =>
     (await api.post(`/assets/${assetId}/auto-edit`, payload)).data,
+  deleteAsset: async (assetId: string) => (await api.delete(`/assets/${assetId}`)).data,
   createReferral: async (ownerUserId: string) => (await api.post('/referral', { action: 'create', ownerUserId })).data,
   createInvite: async (code: string, invitedUserId: string) =>
     (await api.post('/referral', { action: 'invite', code, invitedUserId })).data,
