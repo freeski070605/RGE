@@ -9,7 +9,7 @@ services:
     runtime: node
     name: rge-api
     plan: starter
-    buildCommand: npm ci && npm --prefix dashboard ci && npm run build:all
+    buildCommand: npm ci --include=dev && npm --prefix dashboard ci --include=dev && npm run build:all
     startCommand: npm run start
     healthCheckPath: /api/health
     maxShutdownDelaySeconds: 120
@@ -60,7 +60,7 @@ services:
     runtime: node
     name: rge-workers
     plan: starter
-    buildCommand: npm ci && npm run build
+    buildCommand: npm ci --include=dev && npm run build
     startCommand: npm run worker:start
     maxShutdownDelaySeconds: 120
     envVars:
