@@ -1,0 +1,9 @@
+node_modules
+dist
+.env
+storage/generated/images
+storage/generated/videos
+storage/assets/original
+storage/assets/edited
+dashboard/node_modules
+dashboard/dist

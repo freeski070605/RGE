@@ -1,0 +1,152 @@
+services:
+  - type: keyvalue
+    name: rge-cache
+    plan: starter
+    maxmemoryPolicy: noeviction
+    ipAllowList: []
+
+  - type: web
+    runtime: node
+    name: rge-api
+    rootDir: RGE
+    plan: starter
+    buildCommand: npm ci && npm --prefix dashboard ci && npm run build:all
+    startCommand: npm run start
+    healthCheckPath: /api/health
+    maxShutdownDelaySeconds: 120
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: rge-cache
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: RGE_INTERNAL_TOKEN
+        generateValue: true
+      - key: MONGODB_URI
+        sync: false
+      - key: APP_BASE_URL
+        sync: false
+      - key: OPERATOR_EMAIL
+        sync: false
+      - key: OPERATOR_PASSWORD
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: CLOUDINARY_FOLDER
+        value: rge
+      - key: BACKEND_API_BASE_URL
+        sync: false
+      - key: BACKEND_INTERNAL_TOKEN
+        sync: false
+      - key: INSTAGRAM_GRAPH_VERSION
+        value: v23.0
+      - key: INSTAGRAM_USER_ID
+        sync: false
+      - key: INSTAGRAM_ACCESS_TOKEN
+        sync: false
+      - key: X_ACCESS_TOKEN
+        sync: false
+      - key: FFMPEG_PATH
+        value: ffmpeg
+
+  - type: worker
+    runtime: node
+    name: rge-workers
+    rootDir: RGE
+    plan: starter
+    buildCommand: npm ci && npm run build
+    startCommand: npm run worker:start
+    maxShutdownDelaySeconds: 120
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: rge-cache
+          property: connectionString
+      - key: JWT_SECRET
+        fromService:
+          type: web
+          name: rge-api
+          envVarKey: JWT_SECRET
+      - key: RGE_INTERNAL_TOKEN
+        fromService:
+          type: web
+          name: rge-api
+          envVarKey: RGE_INTERNAL_TOKEN
+      - key: MONGODB_URI
+        sync: false
+      - key: OPERATOR_EMAIL
+        fromService:
+          type: web
+          name: rge-api
+          envVarKey: OPERATOR_EMAIL
+      - key: OPERATOR_PASSWORD
+        fromService:
+          type: web
+          name: rge-api
+          envVarKey: OPERATOR_PASSWORD
+      - key: CLOUDINARY_CLOUD_NAME
+        fromService:
+          type: web
+          name: rge-api
+          envVarKey: CLOUDINARY_CLOUD_NAME
+      - key: CLOUDINARY_API_KEY
+        fromService:
+          type: web
+          name: rge-api
+          envVarKey: CLOUDINARY_API_KEY
+      - key: CLOUDINARY_API_SECRET
+        fromService:
+          type: web
+          name: rge-api
+          envVarKey: CLOUDINARY_API_SECRET
+      - key: CLOUDINARY_FOLDER
+        fromService:
+          type: web
+          name: rge-api
+          envVarKey: CLOUDINARY_FOLDER
+      - key: BACKEND_API_BASE_URL
+        fromService:
+          type: web
+          name: rge-api
+          envVarKey: BACKEND_API_BASE_URL
+      - key: BACKEND_INTERNAL_TOKEN
+        fromService:
+          type: web
+          name: rge-api
+          envVarKey: BACKEND_INTERNAL_TOKEN
+      - key: INSTAGRAM_GRAPH_VERSION
+        fromService:
+          type: web
+          name: rge-api
+          envVarKey: INSTAGRAM_GRAPH_VERSION
+      - key: INSTAGRAM_USER_ID
+        fromService:
+          type: web
+          name: rge-api
+          envVarKey: INSTAGRAM_USER_ID
+      - key: INSTAGRAM_ACCESS_TOKEN
+        fromService:
+          type: web
+          name: rge-api
+          envVarKey: INSTAGRAM_ACCESS_TOKEN
+      - key: X_ACCESS_TOKEN
+        fromService:
+          type: web
+          name: rge-api
+          envVarKey: X_ACCESS_TOKEN
+      - key: FFMPEG_PATH
+        fromService:
+          type: web
+          name: rge-api
+          envVarKey: FFMPEG_PATH
