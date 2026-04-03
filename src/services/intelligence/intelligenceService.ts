@@ -143,7 +143,7 @@ const buildIdeaDraftFromSignal = (signal: BackendFeed['signals'][number]) => {
     ideaType,
     goal,
     audience: goal === 'conversion' ? 'active_players' : 'social_audience',
-    platformRecommendation: signal.recommendedPlatforms?.length ? signal.recommendedPlatforms : ['instagram', 'x'],
+    platformRecommendation: signal.recommendedPlatforms?.length ? signal.recommendedPlatforms : ['instagram'],
     priorityScore: score,
     headline: headlineByType[signal.signalType] || `${player} created a moment worth posting`,
     reason: `${signal.signalType} scored ${Math.round(score)} based on game impact, urgency, and platform fit.`,
@@ -248,7 +248,7 @@ export const syncGameIntelligence = async (days = env.RGE_SYNC_DAYS) => {
             window: signal.window,
             metadata: signal.metadata ?? {},
             scores: scoreSignal(signal),
-            recommendedPlatforms: signal.recommendedPlatforms?.length ? signal.recommendedPlatforms : ['instagram', 'x']
+            recommendedPlatforms: signal.recommendedPlatforms?.length ? signal.recommendedPlatforms : ['instagram']
           }
         },
         { upsert: true, new: true }

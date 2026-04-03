@@ -85,7 +85,7 @@ export const getImplementationSpec = () => ({
     'backend /api/rge/feed -> intelligence queue -> sync player stats, leaderboards, signals, and seed ideas',
     'approved idea -> create brief -> generate variants',
     'variant media request -> media queue -> render image and video assets',
-    'schedule request -> scheduler queue -> publish live Instagram or X content at the scheduled time',
+    'schedule request -> scheduler queue -> publish live Instagram content at the scheduled time',
     'analytics tracking -> performance insights -> strategy snapshot for future brief and variant generation'
   ]
 });

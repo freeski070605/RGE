@@ -72,7 +72,7 @@ const GameSignalSchema = new Schema(
     },
     recommendedPlatforms: {
       type: [String],
-      default: ['instagram', 'x']
+      default: ['instagram']
     },
     status: {
       type: String,

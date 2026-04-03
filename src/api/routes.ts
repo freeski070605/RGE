@@ -50,6 +50,8 @@ import { asyncHandler } from '../utils/asyncHandler';
 import { AppError } from '../utils/errors';
 
 const router = Router();
+const supportedPublishPlatforms = ['instagram', 'story'] as const;
+const supportedPublishPlatformSet = new Set<string>(supportedPublishPlatforms);
 const supportedUploadMimeTypes = new Set([
   'image/jpeg',
   'image/png',
@@ -86,6 +88,7 @@ const upload = multer({
     fileSize: env.UPLOAD_MAX_FILE_SIZE_BYTES
   }
 });
+const optionalPlatformsSchema = z.array(z.enum(supportedPublishPlatforms)).optional();
 
 const generateContentSchema = z.object({
   event: z.object({
@@ -98,7 +101,7 @@ const generateContentSchema = z.object({
     source: z.string().optional(),
     metadata: z.record(z.string(), z.unknown()).optional()
   }),
-  platforms: z.array(z.string()).optional()
+  platforms: optionalPlatformsSchema
 });
 
 const createMediaSchema = z.object({
@@ -108,7 +111,7 @@ const createMediaSchema = z.object({
 const schedulePostSchema = z.object({
   postId: z.string().min(1),
   scheduledFor: z.string().min(1),
-  platforms: z.array(z.string()).optional()
+  platforms: optionalPlatformsSchema
 });
 
 const referralSchema = z.discriminatedUnion('action', [
@@ -179,7 +182,7 @@ const generateVariantsSchema = z.object({
 
 const variantScheduleSchema = z.object({
   scheduledFor: z.string().min(1),
-  platforms: z.array(z.string()).optional()
+  platforms: optionalPlatformsSchema
 });
 
 const publishMetricsSchema = z.object({
@@ -400,7 +403,7 @@ router.post(
   '/v2/content-variants/:variantId/publish-now',
   asyncHandler(async (req, res) => {
     const variantId = z.string().parse(req.params.variantId);
-    const platforms = z.array(z.string()).optional().parse(req.body?.platforms);
+    const platforms = optionalPlatformsSchema.parse(req.body?.platforms);
     const jobs = await publishVariantNow(variantId, platforms);
     res.json(jobs);
   })
@@ -449,6 +452,13 @@ router.post(
   asyncHandler(async (req, res) => {
     const body = generateContentSchema.parse(req.body);
     const platforms = body.platforms?.length ? body.platforms : env.defaultPlatforms;
+
+    for (const platform of platforms) {
+      if (!supportedPublishPlatformSet.has(platform)) {
+        throw new AppError(`Unsupported publish platform: ${platform}`, 400);
+      }
+    }
+
     const { event, post } = await createEventAndDraftPost(body.event, platforms);
     const job = await enqueueContentGeneration({
       postId: String(post._id)
@@ -605,7 +615,7 @@ router.post(
   '/posts/:postId/publish-now',
   asyncHandler(async (req, res) => {
     const postId = z.string().parse(req.params.postId);
-    const platforms = z.array(z.string()).optional().parse(req.body?.platforms);
+    const platforms = optionalPlatformsSchema.parse(req.body?.platforms);
     const result = await publishPost(postId, platforms);
     res.json(result);
   })

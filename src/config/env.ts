@@ -32,7 +32,7 @@ const envSchema = z.object({
   API_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(300),
   AUTH_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(15 * 60 * 1000),
   AUTH_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(10),
-  DEFAULT_POST_PLATFORMS: z.string().default('instagram,x'),
+  DEFAULT_POST_PLATFORMS: z.string().default('instagram'),
   DEFAULT_TIMEZONE: z.string().default('America/New_York'),
   CONTENT_WORKER_CONCURRENCY: z.coerce.number().default(3),
   MEDIA_WORKER_CONCURRENCY: z.coerce.number().default(2),
@@ -47,8 +47,7 @@ const envSchema = z.object({
   CLOUDINARY_FOLDER: z.string().default('rge'),
   INSTAGRAM_GRAPH_VERSION: z.string().default('v23.0'),
   INSTAGRAM_USER_ID: z.string().default(''),
-  INSTAGRAM_ACCESS_TOKEN: z.string().default(''),
-  X_ACCESS_TOKEN: z.string().default('')
+  INSTAGRAM_ACCESS_TOKEN: z.string().default('')
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -97,6 +96,5 @@ export const env = {
   isCloudinaryConfigured: Boolean(
     parsed.data.CLOUDINARY_CLOUD_NAME && parsed.data.CLOUDINARY_API_KEY && parsed.data.CLOUDINARY_API_SECRET
   ),
-  isInstagramConfigured: Boolean(parsed.data.INSTAGRAM_USER_ID && parsed.data.INSTAGRAM_ACCESS_TOKEN),
-  isXConfigured: Boolean(parsed.data.X_ACCESS_TOKEN)
+  isInstagramConfigured: Boolean(parsed.data.INSTAGRAM_USER_ID && parsed.data.INSTAGRAM_ACCESS_TOKEN)
 };

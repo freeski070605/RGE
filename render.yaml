@@ -51,8 +51,6 @@ services:
         sync: false
       - key: INSTAGRAM_ACCESS_TOKEN
         sync: false
-      - key: X_ACCESS_TOKEN
-        sync: false
       - key: FFMPEG_PATH
         value: ffmpeg
 
@@ -138,11 +136,6 @@ services:
           type: web
           name: rge-api
           envVarKey: INSTAGRAM_ACCESS_TOKEN
-      - key: X_ACCESS_TOKEN
-        fromService:
-          type: web
-          name: rge-api
-          envVarKey: X_ACCESS_TOKEN
       - key: FFMPEG_PATH
         fromService:
           type: web

@@ -343,7 +343,6 @@ export function AuthenticatedDashboard(input: {
                       onChange={(event) => setBriefForm((current) => ({ ...current, platform: event.target.value }))}
                     >
                       <option value="instagram">Instagram</option>
-                      <option value="x">X</option>
                       <option value="story">Story</option>
                     </select>
                   </label>

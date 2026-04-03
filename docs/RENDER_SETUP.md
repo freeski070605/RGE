@@ -27,7 +27,7 @@ RGE is deployed as two app services plus one queue datastore:
 
 MongoDB is external.
 Cloudinary is external.
-Instagram and X credentials are external.
+Instagram credentials are external.
 
 ## Before You Start
 
@@ -37,7 +37,6 @@ You need these accounts and credentials ready:
 - MongoDB Atlas connection string
 - Cloudinary `cloud name`, `api key`, and `api secret`
 - Instagram business publishing credentials
-- X publishing access token
 - ReemTeam backend feed URL and internal token
 
 You also need one operator login for the dashboard:
@@ -101,7 +100,6 @@ The worker inherits the shared ones from the Blueprint.
   Token RGE sends to the ReemTeam backend.
 - `INSTAGRAM_USER_ID`
 - `INSTAGRAM_ACCESS_TOKEN`
-- `X_ACCESS_TOKEN`
 
 ### Usually Keep As-Is
 
@@ -165,16 +163,6 @@ Current implementation supports:
 
 - `instagram`
 - `story`
-
-## X Setup
-
-RGE publishes X content through the X API.
-
-Set:
-
-- `X_ACCESS_TOKEN`
-
-The current implementation uploads media first, then creates the post.
 
 ## ReemTeam Backend Feed Setup
 
@@ -259,14 +247,6 @@ Check:
 - inherited env vars in Render
 - build logs and runtime logs for `rge-workers`
 
-### X publish fails
-
-Check:
-
-- `X_ACCESS_TOKEN`
-- media size/type compatibility
-- X API account permissions
-
 ### Instagram publish fails
 
 Check:
@@ -288,7 +268,6 @@ Check:
 - Asset auto-edit works
 - Generated media appears in Cloudinary
 - Instagram publish works
-- X publish works
 - No crash loops in Render logs
 
 ## Official References
