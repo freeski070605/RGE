@@ -15,6 +15,18 @@ import {
 
 type RenderedArtifact = Awaited<ReturnType<typeof uploadBufferToStorage>>;
 
+const canvasToPngBuffer = (canvas: ReturnType<typeof createCanvas>) =>
+  new Promise<Buffer>((resolve, reject) => {
+    canvas.toBuffer((error, buffer) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+
+      resolve(buffer);
+    }, 'image/png');
+  });
+
 const wrapText = (
   context: CanvasRenderingContext2D,
   text: string,
@@ -99,8 +111,10 @@ export const renderCreativeImage = async (post: {
   context.font = 'bold 30px Arial';
   wrapText(context, post.hashtags.join(' '), 90, 930, 880, 38);
 
+  const pngBuffer = await canvasToPngBuffer(canvas);
+
   return uploadBufferToStorage({
-    buffer: canvas.toBuffer('image/png'),
+    buffer: pngBuffer,
     folder: ['generated', 'images'],
     publicId: post.id,
     resourceType: 'image',

@@ -115,7 +115,10 @@ const startMediaWorker = async () => {
     processMediaJobData,
     {
       connection: createRedisConnection(),
-      concurrency: env.MEDIA_WORKER_CONCURRENCY
+      concurrency: env.MEDIA_WORKER_CONCURRENCY,
+      lockDuration: env.MEDIA_JOB_LOCK_DURATION_MS,
+      stalledInterval: env.MEDIA_JOB_STALLED_INTERVAL_MS,
+      maxStalledCount: env.MEDIA_JOB_MAX_STALLED_COUNT
     }
   );
 
