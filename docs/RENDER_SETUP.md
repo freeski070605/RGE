@@ -74,7 +74,7 @@ Notes:
 - Do not set `Root Directory` to `RGE` unless your repo actually contains a nested `RGE/` folder.
 - The Blueprint already wires `REDIS_URL` from `rge-cache`.
 - `JWT_SECRET` and `RGE_INTERNAL_TOKEN` are auto-generated for `rge-api`.
-- `rge-workers` inherits shared secrets from `rge-api` through the Blueprint.
+- `rge-workers` inherits shared secrets and `MONGODB_URI` from `rge-api` through the Blueprint.
 
 ## Required Environment Variables
 
@@ -246,6 +246,15 @@ Check:
 - `REDIS_URL`
 - inherited env vars in Render
 - build logs and runtime logs for `rge-workers`
+
+If you already created `rge-workers` before this Blueprint fix:
+
+1. Open the `rge-workers` service in Render.
+2. Confirm `MONGODB_URI` is present.
+3. If it is missing, either:
+   - redeploy from the updated Blueprint so `MONGODB_URI` is inherited from `rge-api`, or
+   - manually add the same `MONGODB_URI` value to `rge-workers`
+4. Redeploy `rge-workers`.
 
 ### Instagram publish fails
 

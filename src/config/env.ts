@@ -76,7 +76,20 @@ const parsed = envSchema.safeParse(process.env);
 
 if (!parsed.success) {
   const issues = parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('\n');
-  throw new Error(`Invalid environment configuration\n${issues}`);
+  const missingPaths = new Set(parsed.error.issues.map((issue) => issue.path.join('.')));
+  const hints: string[] = [];
+
+  if (missingPaths.has('MONGODB_URI')) {
+    hints.push('MONGODB_URI must be available to every runtime service. On Render, confirm both rge-api and rge-workers receive it.');
+  }
+
+  if (missingPaths.has('REDIS_URL')) {
+    hints.push('REDIS_URL must be available to every runtime service. On Render, confirm it is wired from rge-cache.');
+  }
+
+  throw new Error(
+    `Invalid environment configuration\n${issues}${hints.length ? `\n\nHints:\n${hints.join('\n')}` : ''}`
+  );
 }
 
 const requiredProductionKeys = [

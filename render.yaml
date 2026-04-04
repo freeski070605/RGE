@@ -80,7 +80,10 @@ services:
           name: rge-api
           envVarKey: RGE_INTERNAL_TOKEN
       - key: MONGODB_URI
-        sync: false
+        fromService:
+          type: web
+          name: rge-api
+          envVarKey: MONGODB_URI
       - key: OPERATOR_EMAIL
         fromService:
           type: web
