@@ -1471,3 +1471,469 @@ select:focus {
     width: 100%;
   }
 }
+
+.operator-shell {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 1.1rem;
+  padding: 1.25rem;
+}
+
+.operator-hero,
+.workspace-card,
+.workspace-tab,
+.metric-card,
+.attention-card,
+.queue-item,
+.selection-tile,
+.workflow-card {
+  backdrop-filter: blur(20px);
+  background: var(--bg-elevated);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+}
+
+.operator-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(20rem, 0.95fr);
+  gap: 1rem;
+  border-radius: var(--radius-xl);
+  padding: 1.25rem;
+  background:
+    radial-gradient(circle at top left, rgba(125, 211, 167, 0.14), transparent 22rem),
+    radial-gradient(circle at bottom right, rgba(244, 182, 95, 0.14), transparent 24rem),
+    var(--bg-elevated);
+}
+
+.operator-hero__eyebrow,
+.workspace-card__eyebrow,
+.next-action-banner__label,
+.metric-card span,
+.summary-list__item span,
+.preview-panel__meta span,
+.compact-stat span,
+.health-badge span {
+  display: inline-block;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.72rem;
+  color: var(--accent);
+}
+
+.operator-hero__copy,
+.operator-hero__panel,
+.workspace-stack,
+.summary-list,
+.queue-list,
+.action-stack,
+.variant-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.operator-hero__copy h1,
+.workspace-card h2,
+.preview-panel h3 {
+  margin: 0;
+  font-family: 'Space Grotesk', 'Trebuchet MS', sans-serif;
+}
+
+.operator-hero__copy h1 {
+  font-size: clamp(2rem, 3vw, 3.4rem);
+  line-height: 1.02;
+}
+
+.operator-hero__copy p,
+.workspace-card__body-copy,
+.metric-card p,
+.queue-item p,
+.selection-tile p,
+.attention-card p,
+.workflow-card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.operator-hero__operator,
+.next-action-banner,
+.preview-panel__header,
+.workspace-card__header,
+.preview-panel__meta,
+.selection-card__facts,
+.health-badge {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.9rem;
+}
+
+.operator-hero__operator span,
+.operator-hero__operator p {
+  color: var(--muted);
+  margin: 0;
+}
+
+.operator-hero__operator strong,
+.metric-card strong,
+.compact-stat strong,
+.summary-list__item strong,
+.attention-card strong,
+.preview-panel__meta strong,
+.selection-tile strong,
+.queue-item strong {
+  display: block;
+  font-family: 'Space Grotesk', 'Trebuchet MS', sans-serif;
+}
+
+.metric-strip,
+.queue-grid,
+.today-bottom-grid,
+.review-detail-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.metric-strip {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.metric-card,
+.workspace-card,
+.attention-card,
+.workflow-card,
+.selection-tile,
+.queue-item {
+  border-radius: var(--radius-lg);
+}
+
+.metric-card,
+.workspace-card,
+.attention-card {
+  padding: 1rem;
+}
+
+.metric-card strong {
+  margin: 0.45rem 0;
+  font-size: 2rem;
+}
+
+.operator-hero__actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.next-action-banner {
+  border-radius: var(--radius-lg);
+  padding: 1rem;
+}
+
+.next-action-banner strong {
+  display: block;
+  margin: 0.4rem 0 0.25rem;
+  font-size: 1.2rem;
+  font-family: 'Space Grotesk', 'Trebuchet MS', sans-serif;
+}
+
+.next-action-banner--accent {
+  border-color: rgba(45, 212, 191, 0.25);
+  background: rgba(45, 212, 191, 0.08);
+}
+
+.next-action-banner--warning {
+  border-color: rgba(244, 182, 95, 0.25);
+  background: rgba(244, 182, 95, 0.08);
+}
+
+.next-action-banner--danger,
+.attention-card--danger {
+  border-color: rgba(251, 113, 133, 0.28);
+  background: rgba(251, 113, 133, 0.08);
+}
+
+.workspace-tabs {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.workspace-tab {
+  border-radius: 999px;
+  padding: 0.85rem 1rem;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.workspace-tab strong {
+  display: block;
+  margin-top: 0.3rem;
+  font-size: 1.25rem;
+}
+
+.workspace-tab--active {
+  border-color: rgba(125, 211, 167, 0.45);
+  background: rgba(125, 211, 167, 0.1);
+}
+
+.workspace-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 22rem;
+  gap: 1rem;
+  align-items: start;
+}
+
+.workspace-main,
+.workspace-sidebar {
+  display: grid;
+  gap: 1rem;
+}
+
+.workspace-sidebar {
+  position: sticky;
+  top: 1rem;
+}
+
+.workspace-card__header {
+  margin-bottom: 1rem;
+}
+
+.workspace-empty {
+  display: grid;
+  gap: 0.8rem;
+  place-items: start;
+  padding: 1rem;
+  border-radius: var(--radius-lg);
+  border: 1px dashed rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.workspace-empty__icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(125, 211, 167, 0.12);
+  color: var(--accent);
+}
+
+.queue-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.today-bottom-grid,
+.review-detail-grid,
+.selection-card__grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.queue-list--compact {
+  gap: 0.75rem;
+}
+
+.queue-item,
+.selection-tile,
+.variant-choice {
+  width: 100%;
+  padding: 0.95rem;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  display: grid;
+  gap: 0.7rem;
+}
+
+.queue-item--static {
+  cursor: default;
+}
+
+.queue-item--selected,
+.selection-tile--selected,
+.variant-choice--selected {
+  border-color: rgba(45, 212, 191, 0.45);
+  background: rgba(45, 212, 191, 0.08);
+}
+
+.health-badges,
+.compact-stats-grid,
+.selection-card__facts,
+.preview-panel__meta,
+.action-stack__grid,
+.mode-switcher {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.health-badges,
+.compact-stats-grid,
+.preview-panel__meta {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.compact-stat,
+.summary-list__item,
+.health-badge,
+.workflow-card {
+  padding: 0.9rem;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.review-board {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(20rem, 0.8fr);
+  gap: 1rem;
+}
+
+.preview-panel,
+.review-summary {
+  display: grid;
+  gap: 1rem;
+}
+
+.preview-frame {
+  min-height: 26rem;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #031018;
+}
+
+.preview-frame img,
+.preview-frame video {
+  width: 100%;
+  height: 100%;
+  min-height: 26rem;
+  object-fit: cover;
+  display: block;
+}
+
+.preview-placeholder {
+  min-height: 26rem;
+  display: grid;
+  place-items: center;
+  gap: 0.7rem;
+  text-align: center;
+  color: var(--muted);
+  padding: 1.5rem;
+}
+
+.attention-card--accent {
+  border-color: rgba(45, 212, 191, 0.25);
+  background: rgba(45, 212, 191, 0.08);
+}
+
+.action-stack__grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.workflow-lane {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.workflow-card--completed {
+  border-color: rgba(134, 239, 172, 0.22);
+  background: rgba(134, 239, 172, 0.1);
+}
+
+.workflow-card--active {
+  border-color: rgba(45, 212, 191, 0.24);
+  background: rgba(45, 212, 191, 0.1);
+}
+
+.workflow-card--failed {
+  border-color: rgba(251, 113, 133, 0.24);
+  background: rgba(251, 113, 133, 0.1);
+}
+
+.selection-card__story,
+.selection-card__signals {
+  display: grid;
+  gap: 1rem;
+}
+
+.selection-card__signals h3 {
+  margin: 0;
+  font-family: 'Space Grotesk', 'Trebuchet MS', sans-serif;
+}
+
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.9rem;
+}
+
+.step-ladder {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.step-ladder__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  padding: 0.8rem 0.9rem;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+@media (max-width: 1360px) {
+  .workspace-layout,
+  .review-board,
+  .today-bottom-grid,
+  .review-detail-grid,
+  .selection-card__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-sidebar {
+    position: relative;
+    top: auto;
+  }
+
+  .metric-strip,
+  .queue-grid,
+  .card-grid,
+  .workflow-lane {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .operator-shell {
+    padding: 0.9rem;
+  }
+
+  .operator-hero,
+  .workspace-layout,
+  .workspace-tabs,
+  .metric-strip,
+  .queue-grid,
+  .today-bottom-grid,
+  .review-detail-grid,
+  .card-grid,
+  .health-badges,
+  .compact-stats-grid,
+  .preview-panel__meta,
+  .action-stack__grid,
+  .workflow-lane {
+    grid-template-columns: 1fr;
+  }
+
+  .operator-hero__operator,
+  .next-action-banner,
+  .preview-panel__header,
+  .workspace-card__header,
+  .operator-hero__actions {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
