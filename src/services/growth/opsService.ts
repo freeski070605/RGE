@@ -499,7 +499,17 @@ export const generateVariantsForBrief = async (briefId: string, count = 3) => {
     strategy: strategy.instructions
   });
 
-  await ContentVariantModel.deleteMany({ creativeBriefId: brief._id });
+  await ContentVariantModel.updateMany(
+    {
+      creativeBriefId: brief._id,
+      status: { $ne: 'archived' }
+    },
+    {
+      $set: {
+        status: 'archived'
+      }
+    }
+  );
   const docs = await ContentVariantModel.insertMany(
     variants.map((variant) => ({
       creativeBriefId: brief._id,

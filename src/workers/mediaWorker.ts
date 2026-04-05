@@ -15,7 +15,11 @@ import {
 } from '../services/media-engine/mediaEngine';
 import { maybeAutoScheduleContentItemFromVariant } from '../services/operator/contentItemService';
 import { startWorkerHeartbeat } from '../services/system/workerHeartbeatService';
-import { getDurationMs, logError, logInfo } from '../utils/structuredLogger';
+import { AppError } from '../utils/errors';
+import { getDurationMs, logError, logInfo, logWarn } from '../utils/structuredLogger';
+
+const isMissingVariantError = (error: unknown) =>
+  error instanceof AppError && error.statusCode === 404 && error.message === 'Content variant not found';
 
 export const processMediaJobData = async (
   job: { id?: string | number | null; data: { targetType: 'post'; postId: string } | { targetType: 'variant'; variantId: string } }
@@ -46,6 +50,20 @@ export const processMediaJobData = async (
         message: 'Variant media job completed'
       });
     } catch (error) {
+      if (isMissingVariantError(error)) {
+        logWarn({
+          area: 'media',
+          action: 'process-media-job',
+          status: 'warning',
+          jobId,
+          variantId: job.data.variantId,
+          durationMs: getDurationMs(startedAt),
+          error: error instanceof Error ? error.message : 'Content variant not found',
+          message: 'Skipping stale variant media job because the variant no longer exists'
+        });
+        return;
+      }
+
       await markVariantMediaFailed(
         job.data.variantId,
         error instanceof Error ? error.message : 'Media render failed',
