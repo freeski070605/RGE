@@ -136,7 +136,7 @@ const getDraftNextStep = (item: ContentItemRecord) => {
   if (!selectedVariant || selectedVariant.media.status === 'not_started') {
     return {
       label: 'Render the selected draft',
-      description: 'Make the image or video preview appear here before approving the post.'
+      description: 'Make the image or video preview appear here before approving the action.'
     }
   }
 
@@ -156,15 +156,15 @@ const getDraftNextStep = (item: ContentItemRecord) => {
 
   if (item.stage === 'scheduled') {
     return {
-      label: 'Monitor the scheduled post',
+      label: 'Monitor the scheduled action',
       description: 'The content is queued. Keep an eye on timing and worker health.'
     }
   }
 
   if (item.stage === 'published') {
     return {
-      label: 'Use the result to guide the next post',
-      description: 'Review performance and let the next opportunity build on what worked.'
+      label: 'Use the result to guide the next action',
+      description: 'Review performance and let the next Growth Play build on what worked.'
     }
   }
 
@@ -438,9 +438,9 @@ export function AuthenticatedDashboard(input: {
     const openOpportunity = opportunities.find((opportunity) => opportunity.operatorStatus === 'open')
     if (openOpportunity) {
       return {
-        label: `${opportunities.filter((opportunity) => opportunity.operatorStatus === 'open').length} opportunities are ready`,
-        description: 'Pick the strongest gameplay moment and turn it into a draft.',
-        buttonLabel: 'Create from opportunity',
+        label: `${opportunities.filter((opportunity) => opportunity.operatorStatus === 'open').length} Growth Plays are ready`,
+        description: 'Pick the strongest gameplay or admin signal and turn it into action.',
+        buttonLabel: 'Create from Growth Play',
         tone: 'accent',
         tab: 'create',
         opportunityId: openOpportunity.id
@@ -449,7 +449,7 @@ export function AuthenticatedDashboard(input: {
 
     return {
       label: 'Sync the live feed',
-      description: 'Bring in fresh gameplay activity so the system can rank new opportunities.',
+      description: 'Bring in fresh gameplay activity so the RGE Growth Engine can rank new Growth Plays.',
       buttonLabel: 'Sync now',
       tone: 'accent',
       tab: 'today',
@@ -461,9 +461,9 @@ export function AuthenticatedDashboard(input: {
   const workflowSteps = selectedContentItem
     ? [
         {
-          label: '1. Opportunity',
+          label: '1. Growth Play',
           state: 'completed',
-          detail: 'A moment worth posting has been detected.'
+          detail: 'A meaningful signal has been detected.'
         },
         {
           label: '2. Draft',
@@ -493,7 +493,7 @@ export function AuthenticatedDashboard(input: {
         {
           label: '5. Publish',
           state: ['scheduled', 'published'].includes(selectedContentItem.stage) ? 'completed' : 'current',
-          detail: 'Schedule the post or publish it immediately.'
+          detail: 'Schedule, publish, or take the recommended action.'
         }
       ]
     : []
@@ -538,7 +538,7 @@ export function AuthenticatedDashboard(input: {
     if (selectedContentItem.stage === 'approved') {
       return {
         key: 'schedule' as DraftActionKey,
-        label: 'Schedule post',
+        label: 'Schedule action',
         helper: 'Choose the publish time and place it in the queue.'
       }
     }
@@ -576,7 +576,7 @@ export function AuthenticatedDashboard(input: {
       const item = await dashboardApi.createContentItemFromOpportunity(opportunityId)
       setSelectedContentItemId(item.id)
       setActiveTab('review')
-      input.setGlobalToast({ type: 'success', message: 'Draft created from the opportunity.' })
+      input.setGlobalToast({ type: 'success', message: 'Draft created from the Growth Play.' })
       await refreshAll()
     })
   }
@@ -718,11 +718,11 @@ export function AuthenticatedDashboard(input: {
       <div className="operator-shell">
         <header className="operator-hero">
           <div className="operator-hero__copy">
-            <span className="operator-hero__eyebrow">ReemGrowth Engine</span>
-            <h1>Operator workspace built around the next clear move.</h1>
+            <span className="operator-hero__eyebrow">ReemTeam HQ</span>
+            <h1>Command Center built around the next clear move.</h1>
             <p>
-              This layout keeps the daily flow simple for a novice operator: sync the feed, pick the best opportunity, generate the draft,
-              review the media here in the app, then schedule or publish without leaving the screen.
+              This layout keeps the daily flow simple for operators: sync the feed, pick the best Growth Play, choose the action, then approve,
+              schedule, publish, or route it to the right HQ module.
             </p>
 
             <div className={`next-action-banner next-action-banner--${nextBestAction.tone}`}>
@@ -754,9 +754,9 @@ export function AuthenticatedDashboard(input: {
 
             <div className="metric-strip">
               <article className="metric-card">
-                <span>Open opportunities</span>
+                <span>Open Growth Plays</span>
                 <strong>{globalStatusCounts.opportunitiesToday}</strong>
-                <p>Gameplay moments waiting to become posts.</p>
+                <p>Signals waiting for operator action.</p>
               </article>
               <article className="metric-card">
                 <span>Needs review</span>
@@ -766,12 +766,12 @@ export function AuthenticatedDashboard(input: {
               <article className="metric-card">
                 <span>Ready to publish</span>
                 <strong>{globalStatusCounts.readyToPublish}</strong>
-                <p>Approved posts with media ready to go live.</p>
+                <p>Approved actions with media or scheduling ready.</p>
               </article>
               <article className="metric-card">
                 <span>Scheduled today</span>
                 <strong>{globalStatusCounts.scheduledToday}</strong>
-                <p>Posts already placed on today's calendar.</p>
+                <p>Actions already placed on today's calendar.</p>
               </article>
             </div>
 
@@ -815,8 +815,8 @@ export function AuthenticatedDashboard(input: {
                     </div>
                     <div className="step-ladder">
                       {[
-                        '1. Sync the feed so the system can detect fresh opportunities.',
-                        '2. Open an opportunity and create a draft from it.',
+                        '1. Sync the feed so Game Intelligence can detect fresh signals.',
+                        '2. Open a Growth Play and create the right action from it.',
                         '3. Generate copy, then render media until the preview appears here in the app.',
                         '4. Approve the draft and choose schedule or publish now.'
                       ].map((step) => (
@@ -838,7 +838,7 @@ export function AuthenticatedDashboard(input: {
                     <div className="workspace-card__header">
                       <div>
                         <span className="workspace-card__eyebrow">Create next</span>
-                        <h2>Best opportunities</h2>
+                        <h2>Best Growth Plays</h2>
                       </div>
                       <button className="mini-button" onClick={() => goToTab('create')}>
                         Open create view
@@ -864,7 +864,7 @@ export function AuthenticatedDashboard(input: {
                       ))}
                       {opportunities.length === 0 ? (
                         <EmptyState
-                          title="No opportunities yet"
+                          title="No Growth Plays yet"
                           description="Run a sync to pull the latest gameplay moments into the creation queue."
                           actionLabel="Sync now"
                           onAction={() => void runSync()}
@@ -1023,8 +1023,8 @@ export function AuthenticatedDashboard(input: {
                 <article className="workspace-card selection-card">
                   <div className="workspace-card__header">
                     <div>
-                      <span className="workspace-card__eyebrow">Selected opportunity</span>
-                      <h2>{selectedOpportunity?.headline || 'Choose an opportunity'}</h2>
+                      <span className="workspace-card__eyebrow">Selected Growth Play</span>
+                      <h2>{selectedOpportunity?.headline || 'Choose a Growth Play'}</h2>
                     </div>
                     {selectedOpportunity ? <StatusPill label={selectedOpportunity.urgency} /> : null}
                   </div>
@@ -1127,7 +1127,7 @@ export function AuthenticatedDashboard(input: {
                     </div>
                   ) : (
                     <EmptyState
-                      title="No opportunity selected"
+                      title="No Growth Play selected"
                       description="As soon as the system detects a strong gameplay moment, it will appear here."
                       actionLabel="Sync feed"
                       onAction={() => void runSync()}
@@ -1139,8 +1139,8 @@ export function AuthenticatedDashboard(input: {
                 <article className="workspace-card">
                   <div className="workspace-card__header">
                     <div>
-                      <span className="workspace-card__eyebrow">Opportunity queue</span>
-                      <h2>Choose the next post idea</h2>
+                      <span className="workspace-card__eyebrow">Growth Play queue</span>
+                      <h2>Choose the next HQ action</h2>
                     </div>
                   </div>
                   <div className="card-grid">
@@ -1259,7 +1259,7 @@ export function AuthenticatedDashboard(input: {
 
                           <div className="summary-list">
                             <div className="summary-list__item">
-                              <span>Why this post matters</span>
+                              <span>Why this matters</span>
                               <strong>{selectedContentItem.whyItMatters}</strong>
                             </div>
                             <div className="summary-list__item">
@@ -1875,7 +1875,7 @@ export function AuthenticatedDashboard(input: {
               <div className="step-ladder">
                 {[
                   '1. Open Today to see what needs attention.',
-                  '2. Use Create when you are turning a fresh opportunity into a draft.',
+                  '2. Use Create when you are turning a fresh Growth Play into a draft or action.',
                   '3. Use Review to see the media preview, approve, and publish.',
                   '4. Use Library only when you need raw media uploads.',
                   '5. Use System when something looks broken or confusing.'
@@ -1926,7 +1926,7 @@ export function AuthenticatedDashboard(input: {
                   </div>
                 </div>
               ) : (
-                <p className="workspace-card__body-copy">Select an opportunity or a draft and this summary will keep the key facts in view.</p>
+                <p className="workspace-card__body-copy">Select a Growth Play or a draft and this summary will keep the key facts in view.</p>
               )}
             </article>
 
@@ -1939,12 +1939,12 @@ export function AuthenticatedDashboard(input: {
               </div>
               <div className="summary-list">
                 <div className="summary-list__item">
-                  <span>Opportunity</span>
-                  <strong>A gameplay moment the system thinks could become a post.</strong>
+                  <span>Growth Play</span>
+                  <strong>A gameplay, CRM, table, crib, event, or campaign signal the RGE Growth Engine recommends acting on.</strong>
                 </div>
                 <div className="summary-list__item">
                   <span>Draft</span>
-                  <strong>The working post with copy options and media state.</strong>
+                  <strong>The working content or operator action with copy options and media state.</strong>
                 </div>
                 <div className="summary-list__item">
                   <span>Render media</span>

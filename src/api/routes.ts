@@ -64,6 +64,7 @@ import {
   selectContentItemVisualPreset
 } from '../services/operator/contentItemService';
 import { getGrowthLoopsView } from '../services/operator/growthLoopsService';
+import { getHqBlueprint } from '../services/hq/hqBlueprintService';
 import { getLibraryView } from '../services/operator/libraryService';
 import { listOpportunities } from '../services/operator/opportunityService';
 import { getPerformanceView } from '../services/operator/performanceService';
@@ -269,8 +270,16 @@ router.get(
   asyncHandler(async (_req, res) => {
     res.json({
       status: 'ok',
-      service: 'ReemGrowth Engine'
+      service: 'ReemTeam HQ',
+      module: 'RGE Growth Engine'
     });
+  })
+);
+
+router.get(
+  '/hq/blueprint',
+  asyncHandler(async (_req, res) => {
+    res.json(getHqBlueprint());
   })
 );
 
@@ -345,8 +354,27 @@ router.get(
   })
 );
 
+router.get(
+  '/growth-plays',
+  asyncHandler(async (_req, res) => {
+    res.json(await listOpportunities());
+  })
+);
+
 router.post(
   '/opportunities/:id/create-content-item',
+  asyncHandler(async (req, res) => {
+    const opportunityId = z.string().parse(req.params.id);
+    const item = await createContentItemFromOpportunity({
+      opportunityId,
+      operatorEmail: req.operator?.email || env.OPERATOR_EMAIL
+    });
+    res.status(201).json(item);
+  })
+);
+
+router.post(
+  '/growth-plays/:id/create-content-item',
   asyncHandler(async (req, res) => {
     const opportunityId = z.string().parse(req.params.id);
     const item = await createContentItemFromOpportunity({
@@ -371,7 +399,33 @@ router.post(
 );
 
 router.post(
+  '/growth-plays/:id/save-for-later',
+  asyncHandler(async (req, res) => {
+    const opportunityId = z.string().parse(req.params.id);
+    const saved = await saveOpportunityForLater(opportunityId);
+    res.json({
+      id: String(saved._id),
+      operatorStatus: saved.operatorStatus,
+      savedForLaterAt: saved.savedForLaterAt
+    });
+  })
+);
+
+router.post(
   '/opportunities/:id/dismiss',
+  asyncHandler(async (req, res) => {
+    const opportunityId = z.string().parse(req.params.id);
+    const dismissed = await dismissOpportunity(opportunityId);
+    res.json({
+      id: String(dismissed._id),
+      operatorStatus: dismissed.operatorStatus,
+      dismissedAt: dismissed.dismissedAt
+    });
+  })
+);
+
+router.post(
+  '/growth-plays/:id/dismiss',
   asyncHandler(async (req, res) => {
     const opportunityId = z.string().parse(req.params.id);
     const dismissed = await dismissOpportunity(opportunityId);

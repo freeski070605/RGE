@@ -31,12 +31,12 @@ export const dashboardApi = {
   syncIntelligence: async (payload?: { days?: number; mode?: 'sync' | 'queue' }) =>
     (await api.post('/v2/intelligence/sync', payload ?? {})).data,
   getCommandCenter: async () => (await api.get<CommandCenterView>('/command-center')).data,
-  getOpportunities: async () => (await api.get<OpportunityRecord[]>('/opportunities')).data,
+  getOpportunities: async () => (await api.get<OpportunityRecord[]>('/growth-plays')).data,
   createContentItemFromOpportunity: async (opportunityId: string) =>
-    (await api.post<ContentItemRecord>(`/opportunities/${opportunityId}/create-content-item`)).data,
+    (await api.post<ContentItemRecord>(`/growth-plays/${opportunityId}/create-content-item`)).data,
   saveOpportunityForLater: async (opportunityId: string) =>
-    (await api.post(`/opportunities/${opportunityId}/save-for-later`)).data,
-  dismissOpportunity: async (opportunityId: string) => (await api.post(`/opportunities/${opportunityId}/dismiss`)).data,
+    (await api.post(`/growth-plays/${opportunityId}/save-for-later`)).data,
+  dismissOpportunity: async (opportunityId: string) => (await api.post(`/growth-plays/${opportunityId}/dismiss`)).data,
   getPipeline: async () => (await api.get<PipelineView>('/pipeline')).data,
   getContentItem: async (itemId: string) => (await api.get<ContentItemRecord>(`/content-items/${itemId}`)).data,
   generateContentItemCopy: async (itemId: string, count = 3) =>

@@ -84,7 +84,7 @@ export default function App() {
               <RefreshCw size={18} />
               <strong>Checking operator session</strong>
             </div>
-            <p>Connecting to ReemGrowth Engine and restoring your secure workspace.</p>
+            <p>Connecting to ReemTeam HQ and restoring your secure workspace.</p>
           </div>
         </div>
       </div>
@@ -103,7 +103,7 @@ export default function App() {
               <LockKeyhole size={18} />
               <strong>Operator sign in</strong>
             </div>
-            <p>Use your ReemGrowth Engine operator account to access the live workspace.</p>
+            <p>Use your ReemTeam HQ operator account to access the live workspace.</p>
             <label>
               Email
               <input
