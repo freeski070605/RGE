@@ -224,7 +224,19 @@ const publishMetricsSchema = z.object({
 });
 
 const updateOperatorSettingsSchema = z.object({
-  mode: z.enum(['autopilot', 'assisted', 'manual']).optional()
+  mode: z.enum(['autopilot', 'assisted', 'manual']).optional(),
+  activeCampaign: z
+    .enum([
+      'none',
+      'weekend_push',
+      'event_night',
+      'referral_growth',
+      'leaderboard_race',
+      'high_stakes_promo',
+      'new_player_activation',
+      'inactive_player_reactivation'
+    ])
+    .optional()
 });
 
 const generateCopySchema = z.object({

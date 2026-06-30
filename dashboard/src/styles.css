@@ -1758,6 +1758,23 @@ select:focus {
   background: rgba(45, 212, 191, 0.08);
 }
 
+.explain-box {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.85rem;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.explain-box summary {
+  cursor: pointer;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.explain-box p {
+  margin: 0.7rem 0;
+}
+
 .health-badges,
 .compact-stats-grid,
 .selection-card__facts,

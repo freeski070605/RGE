@@ -14,6 +14,7 @@ export type OperatorSettingsRecord = {
   approvedPlatforms: string[];
   approvedFormats: string[];
   avoidNarrativeRepeatHours: number;
+  activeCampaign: string;
   updatedAt: string | null;
 };
 
@@ -30,6 +31,25 @@ export type OpportunityRecord = {
   urgency: string;
   confidenceScore: number;
   estimatedValue: number;
+  finalScore: number;
+  scoreParts: Record<string, number>;
+  penalties: Record<string, number>;
+  explanation: {
+    summary: string;
+    indicators: string[];
+    scoreBoosts: string[];
+    penalties: string[];
+    formatReason: string;
+    timing: string;
+  } | null;
+  sourceIndicators: Array<{
+    id: string;
+    type: string;
+    window: string;
+    confidence: number;
+    scoreParts: Record<string, number>;
+    occurredAt: string;
+  }>;
   freshness: string;
   sourceSignals: Array<{
     id: string;

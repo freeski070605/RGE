@@ -20,8 +20,13 @@ type ModuleBag = {
   ContentItemModel: any;
   CreativeBriefModel: any;
   ContentIdeaModel: any;
+  OpportunityCandidateModel: any;
+  DerivedIndicatorModel: any;
+  NormalizedEventModel: any;
+  OperatorSettingModel: any;
   AssetModel: any;
   WorkerHeartbeatModel: any;
+  syncRgeFeedV3: (input?: { days?: number; preloadedFeed?: any }) => Promise<any>;
   mongoose: typeof import('mongoose');
 };
 
@@ -190,8 +195,13 @@ before(async () => {
   const { ContentItemModel } = await import('../src/db/models/ContentItem');
   const { CreativeBriefModel } = await import('../src/db/models/CreativeBrief');
   const { ContentIdeaModel } = await import('../src/db/models/ContentIdea');
+  const { OpportunityCandidateModel } = await import('../src/db/models/OpportunityCandidate');
+  const { DerivedIndicatorModel } = await import('../src/db/models/DerivedIndicator');
+  const { NormalizedEventModel } = await import('../src/db/models/NormalizedEvent');
+  const { OperatorSettingModel } = await import('../src/db/models/OperatorSetting');
   const { AssetModel } = await import('../src/db/models/Asset');
   const { WorkerHeartbeatModel } = await import('../src/db/models/WorkerHeartbeat');
+  const { syncRgeFeedV3 } = await import('../src/services/intelligence/rgeFeedV3Service');
 
   modules = {
     env,
@@ -204,8 +214,13 @@ before(async () => {
     ContentItemModel,
     CreativeBriefModel,
     ContentIdeaModel,
+    OpportunityCandidateModel,
+    DerivedIndicatorModel,
+    NormalizedEventModel,
+    OperatorSettingModel,
     AssetModel,
     WorkerHeartbeatModel,
+    syncRgeFeedV3,
     mongoose: mongoose.default
   };
 
@@ -279,6 +294,160 @@ test('sync creates operator-facing opportunities and the content item lifecycle 
   assert.equal((integrity.payload as any).mediaPipeline.output, 'ok');
   assert.equal((integrity.payload as any).mediaPipeline.serving, 'ok');
   assert.ok((integrity.payload as any).lastSuccessfulMediaJob);
+});
+
+test('v3 opportunity detection ranks explainable ReemTeam moments and filters weak/internal opportunities', async () => {
+  const now = new Date();
+  const minutesAgo = (minutes: number) => new Date(now.getTime() - minutes * 60 * 1000).toISOString();
+  const feed = {
+    generatedAt: now.toISOString(),
+    nextCursor: 'cursor-after-v3',
+    events: [
+      {
+        eventId: 'reem-1',
+        eventType: 'reem_achieved',
+        occurredAt: minutesAgo(10),
+        playerId: 'jay',
+        playerDisplayName: 'Jay',
+        cribId: 'back-room',
+        cribName: 'Back Room',
+        tableId: 'table-1',
+        stake: 20,
+        matchId: 'match-reem-1',
+        amountWon: 95,
+        winType: 'reem',
+        visibilitySafe: true
+      },
+      {
+        eventId: 'normal-1',
+        eventType: 'round_completed',
+        occurredAt: minutesAgo(12),
+        playerId: 'sam',
+        playerDisplayName: 'Sam',
+        stake: 1,
+        amountWon: 4,
+        winType: 'normal_low_hand',
+        visibilitySafe: true
+      },
+      {
+        eventId: 'payout-1',
+        eventType: 'high_stakes_win',
+        occurredAt: minutesAgo(9),
+        playerId: 'nina',
+        playerDisplayName: 'Nina',
+        cribId: 'crown-room',
+        cribName: 'Crown Room',
+        stake: 50,
+        amountWon: 260,
+        winType: 'normal_low_hand',
+        visibilitySafe: true
+      },
+      {
+        eventId: 'drop-1',
+        eventType: 'drop_caught',
+        occurredAt: minutesAgo(8),
+        playerId: 'mo',
+        playerDisplayName: 'Mo',
+        cribId: 'back-room',
+        cribName: 'Back Room',
+        stake: 10,
+        amountWon: 35,
+        winType: 'caught_drop',
+        visibilitySafe: true
+      },
+      {
+        eventId: 'leader-1',
+        eventType: 'leaderboard_changed',
+        occurredAt: minutesAgo(7),
+        playerId: 'jay',
+        playerDisplayName: 'Jay',
+        leaderboardMovement: { metric: 'daily_reems', previousRank: 8, currentRank: 3 },
+        visibilitySafe: true
+      },
+      {
+        eventId: 'crib-1',
+        eventType: 'event_table_active',
+        occurredAt: minutesAgo(6),
+        cribId: 'quick-smoke',
+        cribName: 'Quick Smoke',
+        tableId: 'table-2',
+        stake: 5,
+        visibilitySafe: true
+      },
+      {
+        eventId: 'crib-2',
+        eventType: 'table_filled',
+        occurredAt: minutesAgo(5),
+        cribId: 'quick-smoke',
+        cribName: 'Quick Smoke',
+        tableId: 'table-2',
+        stake: 5,
+        visibilitySafe: true
+      },
+      {
+        eventId: 'wallet-1',
+        eventType: 'wallet_credit_awarded',
+        occurredAt: minutesAgo(4),
+        playerId: 'jay',
+        playerDisplayName: 'Jay',
+        amountWon: 25,
+        visibilitySafe: false
+      }
+    ]
+  };
+
+  await modules.syncRgeFeedV3({ preloadedFeed: feed });
+  await modules.syncRgeFeedV3({ preloadedFeed: feed });
+
+  let opportunities = await apiJson('/api/opportunities');
+  const rows = opportunities.payload as any[];
+  const types = rows.map((row) => row.opportunityType);
+
+  assert.equal(await modules.OpportunityCandidateModel.countDocuments({ sourceEventIds: 'reem-1' }), 1);
+  assert.equal(types.includes('reem_moment'), true);
+  assert.equal(types.includes('caught_drop'), true);
+  assert.equal(types.includes('leaderboard_jump'), true);
+  assert.equal(types.includes('hot_crib'), true);
+  assert.equal(types.includes('wallet_credit_momentum'), false);
+  assert.equal(types.includes('deposit_momentum'), false);
+
+  const reem = rows.find((row) => row.opportunityType === 'reem_moment');
+  const payout = rows.find((row) => row.opportunityType === 'high_stakes_win');
+  const normal = rows.find((row) => row.opportunityType === 'normal_low_hand');
+  assert.ok(reem.finalScore > 60);
+  assert.ok(payout.finalScore > (normal?.finalScore ?? 0));
+  assert.ok(reem.explanation.summary.includes('RGE is showing this'));
+  assert.ok(Object.keys(reem.scoreParts).includes('gameplayIntensity'));
+
+  await modules.OperatorSettingModel.findOneAndUpdate(
+    { operatorEmail: process.env.OPERATOR_EMAIL },
+    { $set: { activeCampaign: 'high_stakes_promo' } },
+    { upsert: true }
+  );
+  await modules.syncRgeFeedV3({ preloadedFeed: feed });
+  opportunities = await apiJson('/api/opportunities');
+  const boostedPayout = (opportunities.payload as any[]).find((row) => row.opportunityType === 'high_stakes_win');
+  assert.ok(boostedPayout.scoreParts.campaignFit > reem.scoreParts.campaignFit);
+
+  const fatigueFeed = {
+    generatedAt: now.toISOString(),
+    events: [1, 2, 3, 4].map((index) => ({
+      eventId: `reem-fatigue-${index}`,
+      eventType: 'reem_achieved',
+      occurredAt: minutesAgo(index),
+      playerId: `player-fatigue-${index}`,
+      playerDisplayName: `Player ${index}`,
+      cribId: 'back-room',
+      cribName: 'Back Room',
+      stake: 5,
+      amountWon: 40,
+      winType: 'reem',
+      visibilitySafe: true
+    }))
+  };
+  await modules.syncRgeFeedV3({ preloadedFeed: fatigueFeed });
+  const fatigued = await modules.OpportunityCandidateModel.findOne({ candidateKey: 'reem_moment:reem-fatigue-4' }).lean();
+  assert.ok(fatigued.penalties.fatiguePenalty > 0);
 });
 
 test('media worker persists failure details when an attached asset path is invalid', async () => {

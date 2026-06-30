@@ -62,7 +62,7 @@ export const dashboardApi = {
   getLibrary: async () => (await api.get<LibraryView>('/library')).data,
   getGrowthLoops: async () => (await api.get<GrowthLoopsView>('/growth-loops')).data,
   getSettings: async () => (await api.get<OperatorSettingsRecord>('/settings')).data,
-  updateSettings: async (payload: Partial<Pick<OperatorSettingsRecord, 'mode'>>) =>
+  updateSettings: async (payload: Partial<Pick<OperatorSettingsRecord, 'mode' | 'activeCampaign'>>) =>
     (await api.patch<OperatorSettingsRecord>('/settings', payload)).data,
   getSystemHealth: async () => (await api.get<SystemHealthView>('/system-health')).data,
   getSystemIntegrity: async () => (await api.get<SystemIntegrityView>('/system-integrity')).data,

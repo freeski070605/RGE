@@ -1050,6 +1050,10 @@ export function AuthenticatedDashboard(input: {
                             <span>Estimated value</span>
                             <strong>{fmtCompact(selectedOpportunity.estimatedValue)}</strong>
                           </div>
+                          <div>
+                            <span>Final score</span>
+                            <strong>{Math.round(selectedOpportunity.finalScore)}</strong>
+                          </div>
                         </div>
                         <div className="chip-row">
                           {selectedOpportunity.recommendedPlatforms.map((platform) => (
@@ -1058,6 +1062,30 @@ export function AuthenticatedDashboard(input: {
                             </span>
                           ))}
                         </div>
+                        {selectedOpportunity.explanation ? (
+                          <details className="explain-box">
+                            <summary>Why this?</summary>
+                            <p>{selectedOpportunity.explanation.summary}</p>
+                            <div className="summary-list">
+                              <div className="summary-list__item">
+                                <span>Boosted by</span>
+                                <strong>{selectedOpportunity.explanation.scoreBoosts.join(', ') || 'Freshness'}</strong>
+                              </div>
+                              <div className="summary-list__item">
+                                <span>Penalties</span>
+                                <strong>{selectedOpportunity.explanation.penalties.join(', ') || 'None'}</strong>
+                              </div>
+                              <div className="summary-list__item">
+                                <span>Format reason</span>
+                                <strong>{selectedOpportunity.explanation.formatReason}</strong>
+                              </div>
+                              <div className="summary-list__item">
+                                <span>Timing</span>
+                                <strong>{selectedOpportunity.explanation.timing}</strong>
+                              </div>
+                            </div>
+                          </details>
+                        ) : null}
                         <button
                           className="primary-button"
                           onClick={() => void createContentItem(selectedOpportunity.id)}
@@ -1070,6 +1098,15 @@ export function AuthenticatedDashboard(input: {
 
                       <div className="selection-card__signals">
                         <h3>Signals behind this recommendation</h3>
+                        {selectedOpportunity.sourceIndicators.length ? (
+                          <div className="chip-row">
+                            {selectedOpportunity.sourceIndicators.map((indicator) => (
+                              <span key={indicator.id} className="chip">
+                                {indicator.type} {Math.round(indicator.confidence)}%
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
                         <div className="signal-list">
                           {selectedOpportunity.sourceSignals.map((signal) => (
                             <article key={signal.id} className="signal-row">
@@ -1119,7 +1156,9 @@ export function AuthenticatedDashboard(input: {
                         </div>
                         <strong>{opportunity.headline}</strong>
                         <p>{opportunity.whyItMatters}</p>
-                        <span>{opportunity.recommendedFormat}</span>
+                        <span>
+                          {opportunity.recommendedFormat} - score {Math.round(opportunity.finalScore)}
+                        </span>
                       </button>
                     ))}
                   </div>

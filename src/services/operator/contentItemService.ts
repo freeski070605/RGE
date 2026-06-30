@@ -5,6 +5,7 @@ import { ContentIdeaModel } from '../../db/models/ContentIdea';
 import { ContentItemModel } from '../../db/models/ContentItem';
 import { ContentVariantModel } from '../../db/models/ContentVariant';
 import { CreativeBriefModel } from '../../db/models/CreativeBrief';
+import { OpportunityCandidateModel } from '../../db/models/OpportunityCandidate';
 import { PerformanceInsightModel } from '../../db/models/PerformanceInsight';
 import { PublishingJobModel } from '../../db/models/PublishingJob';
 import {
@@ -233,6 +234,57 @@ const computeAutopilotSchedule = () => {
   const scheduledAt = new Date(Date.now() + env.AUTOPILOT_SCHEDULE_DELAY_MINUTES * 60 * 1000);
   scheduledAt.setMinutes(Math.ceil(scheduledAt.getMinutes() / 15) * 15, 0, 0);
   return scheduledAt.toISOString();
+};
+
+const materializeCandidateAsContentIdea = async (opportunityId: string) => {
+  const candidate = await OpportunityCandidateModel.findById(opportunityId);
+  if (!candidate) {
+    return null;
+  }
+
+  const existingIdeaId = (candidate.metadata as any)?.contentIdeaId;
+  if (existingIdeaId) {
+    const existingIdea = await ContentIdeaModel.findById(existingIdeaId);
+    if (existingIdea) {
+      return existingIdea;
+    }
+  }
+
+  const idea = await ContentIdeaModel.create({
+    signalIds: [],
+    sourceEventIds: candidate.sourceEventIds ?? [],
+    ideaType: ['hot_crib', 'table_filling_fast', 'stake_tier_heating_up'].includes(candidate.opportunityType)
+      ? 'crib_activity'
+      : 'game_highlight',
+    goal: 'Turn a ranked ReemTeam V3 opportunity into operator-ready content.',
+    audience: 'ReemTeam players and prospects',
+    platformRecommendation: candidate.recommendedPlatforms,
+    priorityScore: candidate.finalScore,
+    headline: candidate.title,
+    reason: candidate.whyItMatters,
+    hookAngle: candidate.recommendedAngle,
+    ctaAngle: candidate.cribName ? `Join ${candidate.cribName}` : 'Jump into ReemTeam',
+    linkedPlayers: candidate.playerId ? [candidate.playerId] : [],
+    campaignTags: ['v3', candidate.opportunityType],
+    opportunityType: candidate.opportunityType,
+    whyItMatters: candidate.whyItMatters,
+    recommendedContentAngle: candidate.recommendedAngle,
+    recommendedFormat: candidate.recommendedFormat,
+    recommendedPlatforms: candidate.recommendedPlatforms,
+    urgency: candidate.urgency,
+    confidenceScore: candidate.confidence,
+    estimatedValue: candidate.estimatedValue,
+    whyThisRecommendation: (candidate.metadata as any)?.explanation?.summary ?? candidate.whyItMatters
+  });
+
+  candidate.status = 'converted';
+  candidate.metadata = {
+    ...((candidate.metadata as Record<string, unknown>) ?? {}),
+    contentIdeaId: String(idea._id)
+  } as never;
+  await candidate.save();
+
+  return idea;
 };
 
 const attachLegacyContentItemLinks = async (input: {
@@ -610,10 +662,11 @@ const validateSchedulingGuardrails = async (input: {
 };
 
 export const createContentItemFromOpportunity = async (input: { opportunityId: string; operatorEmail: string }) => {
-  const [idea, settings] = await Promise.all([
+  const [existingIdea, settings] = await Promise.all([
     ContentIdeaModel.findById(input.opportunityId),
     getOperatorSettings(input.operatorEmail)
   ]);
+  const idea = existingIdea ?? (await materializeCandidateAsContentIdea(input.opportunityId));
 
   if (!idea) {
     throw new AppError('Opportunity not found', 404);
@@ -661,7 +714,7 @@ export const createContentItemFromOpportunity = async (input: { opportunityId: s
   });
 
   const brief = await createBriefFromIdea({
-    ideaId: input.opportunityId,
+    ideaId: String(idea._id),
     platform: idea.recommendedPlatforms?.[0] || idea.platformRecommendation?.[0],
     format: idea.recommendedFormat || undefined,
     tone: settings.mode === 'manual' ? 'operator-guided and precise' : 'competitive and social-first',
@@ -1004,6 +1057,23 @@ export const archiveContentItem = async (input: { itemId: string; reason?: strin
 };
 
 export const saveOpportunityForLater = async (opportunityId: string) => {
+  const candidate = await OpportunityCandidateModel.findByIdAndUpdate(
+    opportunityId,
+    {
+      $set: {
+        status: 'saved'
+      }
+    },
+    { new: true }
+  );
+  if (candidate) {
+    return {
+      _id: candidate._id,
+      operatorStatus: candidate.status,
+      savedForLaterAt: candidate.updatedAt
+    } as any;
+  }
+
   const opportunity = await ContentIdeaModel.findByIdAndUpdate(
     opportunityId,
     {
@@ -1023,6 +1093,23 @@ export const saveOpportunityForLater = async (opportunityId: string) => {
 };
 
 export const dismissOpportunity = async (opportunityId: string) => {
+  const candidate = await OpportunityCandidateModel.findByIdAndUpdate(
+    opportunityId,
+    {
+      $set: {
+        status: 'dismissed'
+      }
+    },
+    { new: true }
+  );
+  if (candidate) {
+    return {
+      _id: candidate._id,
+      operatorStatus: candidate.status,
+      dismissedAt: candidate.updatedAt
+    } as any;
+  }
+
   const opportunity = await ContentIdeaModel.findByIdAndUpdate(
     opportunityId,
     {

@@ -1,25 +1,18 @@
 import { ContentIdeaModel } from '../../db/models/ContentIdea';
 import { ContentItemModel } from '../../db/models/ContentItem';
+import { DerivedIndicatorModel } from '../../db/models/DerivedIndicator';
 import { GameSignalModel } from '../../db/models/GameSignal';
+import { OpportunityCandidateModel } from '../../db/models/OpportunityCandidate';
 
 const freshnessLabel = (createdAt: Date) => {
   const ageHours = Math.max(0, (Date.now() - createdAt.getTime()) / (60 * 60 * 1000));
-  if (ageHours < 3) {
-    return 'Just in';
-  }
-
-  if (ageHours < 12) {
-    return 'Fresh today';
-  }
-
-  if (ageHours < 24) {
-    return 'Today';
-  }
-
+  if (ageHours < 3) return 'Just in';
+  if (ageHours < 12) return 'Fresh today';
+  if (ageHours < 24) return 'Today';
   return 'Aging';
 };
 
-export const listOpportunities = async () => {
+const listLegacyOpportunities = async () => {
   const opportunities = await ContentIdeaModel.find({
     operatorStatus: { $in: ['open', 'saved', 'converted'] }
   })
@@ -68,6 +61,11 @@ export const listOpportunities = async () => {
         urgency: opportunity.urgency ?? 'medium',
         confidenceScore: opportunity.confidenceScore ?? opportunity.priorityScore ?? 0,
         estimatedValue: opportunity.estimatedValue ?? opportunity.priorityScore ?? 0,
+        finalScore: opportunity.priorityScore ?? 0,
+        scoreParts: {},
+        penalties: {},
+        explanation: null,
+        sourceIndicators: [],
         freshness: freshnessLabel(opportunity.createdAt),
         sourceSignals,
         operatorStatus: opportunity.operatorStatus ?? 'open',
@@ -76,4 +74,80 @@ export const listOpportunities = async () => {
         updatedAt: opportunity.updatedAt
       };
     });
+};
+
+export const listOpportunities = async () => {
+  const candidates = await OpportunityCandidateModel.find({
+    status: { $in: ['open', 'saved', 'converted'] },
+    visibilitySafe: true,
+    finalScore: { $gte: 28 }
+  })
+    .sort({ finalScore: -1, createdAt: -1 })
+    .limit(80)
+    .lean();
+
+  if (!candidates.length) {
+    return listLegacyOpportunities();
+  }
+
+  const indicatorIds = candidates.flatMap((candidate) => (candidate.sourceIndicatorIds ?? []).map((id: any) => String(id)));
+  const indicators = indicatorIds.length ? await DerivedIndicatorModel.find({ _id: { $in: indicatorIds } }).lean() : [];
+  const indicatorMap = new Map(indicators.map((indicator) => [String(indicator._id), indicator]));
+  const ideaIds = candidates.map((candidate) => String((candidate.metadata as any)?.contentIdeaId ?? '')).filter(Boolean);
+  const contentItems = ideaIds.length
+    ? await ContentItemModel.find({ sourceOpportunityId: { $in: ideaIds } }).select('sourceOpportunityId stage').lean()
+    : [];
+  const contentItemByIdeaId = new Map(
+    contentItems.map((item) => [String(item.sourceOpportunityId), { id: String(item._id), stage: item.stage }])
+  );
+
+  return candidates.map((candidate) => {
+    const sourceIndicators = (candidate.sourceIndicatorIds ?? [])
+      .map((id: any) => indicatorMap.get(String(id)))
+      .filter(Boolean)
+      .map((indicator) => ({
+        id: String(indicator!._id),
+        type: indicator!.indicatorType,
+        window: indicator!.window,
+        confidence: indicator!.confidence,
+        scoreParts: indicator!.scoreParts ?? {},
+        occurredAt: indicator!.occurredAt
+      }));
+
+    const sourceSignals = sourceIndicators.map((indicator) => ({
+      id: indicator.id,
+      type: indicator.type,
+      player: candidate.playerDisplayName || candidate.cribName || 'ReemTeam',
+      tableName: candidate.cribName || candidate.tableId || '',
+      occurredAt: indicator.occurredAt,
+      amount: candidate.estimatedValue ?? 0
+    }));
+    const contentIdeaId = String((candidate.metadata as any)?.contentIdeaId ?? '');
+
+    return {
+      id: String(candidate._id),
+      title: candidate.title,
+      headline: candidate.title,
+      opportunityType: candidate.opportunityType,
+      whyItMatters: candidate.whyItMatters,
+      whyAmISeeingThis: (candidate.metadata as any)?.explanation?.summary ?? candidate.whyItMatters,
+      recommendedContentAngle: candidate.recommendedAngle,
+      recommendedFormat: candidate.recommendedFormat,
+      recommendedPlatforms: candidate.recommendedPlatforms ?? [],
+      urgency: candidate.urgency,
+      confidenceScore: candidate.confidence,
+      estimatedValue: candidate.estimatedValue,
+      finalScore: candidate.finalScore,
+      scoreParts: candidate.scoreParts ?? {},
+      penalties: candidate.penalties ?? {},
+      explanation: (candidate.metadata as any)?.explanation ?? null,
+      sourceIndicators,
+      freshness: freshnessLabel(candidate.createdAt),
+      sourceSignals,
+      operatorStatus: candidate.status,
+      contentItem: contentIdeaId ? contentItemByIdeaId.get(contentIdeaId) ?? null : null,
+      createdAt: candidate.createdAt,
+      updatedAt: candidate.updatedAt
+    };
+  });
 };

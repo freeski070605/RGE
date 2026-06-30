@@ -6,6 +6,7 @@ const serializeSettings = (settings: any, operatorEmail: string) => ({
   approvedPlatforms: settings?.approvedPlatforms ?? ['instagram', 'story'],
   approvedFormats: settings?.approvedFormats ?? ['reel', 'carousel', 'story', 'square'],
   avoidNarrativeRepeatHours: settings?.avoidNarrativeRepeatHours ?? 24,
+  activeCampaign: settings?.activeCampaign ?? 'none',
   updatedAt: settings?.updatedAt ?? null
 });
 
@@ -18,7 +19,8 @@ export const getOperatorSettings = async (operatorEmail: string) => {
         mode: 'assisted',
         approvedPlatforms: ['instagram', 'story'],
         approvedFormats: ['reel', 'carousel', 'story', 'square'],
-        avoidNarrativeRepeatHours: 24
+        avoidNarrativeRepeatHours: 24,
+        activeCampaign: 'none'
       }
     },
     { upsert: true, new: true }
@@ -31,13 +33,23 @@ export const updateOperatorSettings = async (
   operatorEmail: string,
   updates: {
     mode?: 'autopilot' | 'assisted' | 'manual';
+    activeCampaign?:
+      | 'none'
+      | 'weekend_push'
+      | 'event_night'
+      | 'referral_growth'
+      | 'leaderboard_race'
+      | 'high_stakes_promo'
+      | 'new_player_activation'
+      | 'inactive_player_reactivation';
   }
 ) => {
   const settings = await OperatorSettingModel.findOneAndUpdate(
     { operatorEmail },
     {
       $set: {
-        ...(updates.mode ? { mode: updates.mode } : {})
+        ...(updates.mode ? { mode: updates.mode } : {}),
+        ...(updates.activeCampaign ? { activeCampaign: updates.activeCampaign } : {})
       },
       $setOnInsert: {
         operatorEmail

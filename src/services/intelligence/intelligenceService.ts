@@ -6,6 +6,7 @@ import { PlayerStatsDailyModel } from '../../db/models/PlayerStatsDaily';
 import { buildOpportunityDraftFromSignal, isOperatorFacingSignal } from '../operator/opportunityRules';
 import { AppError } from '../../utils/errors';
 import { getDurationMs, logError, logInfo } from '../../utils/structuredLogger';
+import { syncRgeFeedV3 } from './rgeFeedV3Service';
 
 type WindowKey = '24h' | '7d' | '30d';
 
@@ -279,13 +280,16 @@ export const syncGameIntelligence = async (days = env.RGE_SYNC_DAYS) => {
       );
     }
 
+    const v3 = await syncRgeFeedV3({ days, preloadedFeed: feed });
+
     const result = {
       syncedAt: new Date().toISOString(),
       summary: feed.summary,
       upsertedPlayerSnapshots: playerOperations.length,
       upsertedLeaderboards: feed.leaderboards.length,
       upsertedSignals: feed.signals.length,
-      createdIdeas: ideaDocs.length
+      createdIdeas: ideaDocs.length,
+      v3
     };
 
     logInfo({

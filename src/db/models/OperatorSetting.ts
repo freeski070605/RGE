@@ -24,6 +24,20 @@ const OperatorSettingSchema = new Schema(
     avoidNarrativeRepeatHours: {
       type: Number,
       default: 24
+    },
+    activeCampaign: {
+      type: String,
+      enum: [
+        'none',
+        'weekend_push',
+        'event_night',
+        'referral_growth',
+        'leaderboard_race',
+        'high_stakes_promo',
+        'new_player_activation',
+        'inactive_player_reactivation'
+      ],
+      default: 'none'
     }
   },
   {
