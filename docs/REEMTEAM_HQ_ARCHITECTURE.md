@@ -1,8 +1,8 @@
 # ReemTeam HQ Architecture
 
-ReemTeam HQ is the private backend and admin command center for the ReemTeam ecosystem. RGE now means **RGE Growth Engine**, a native HQ module that turns gameplay and admin activity into Growth Plays.
+ReemTeam HQ is the private backend/admin command center for the ReemTeam ecosystem.
 
-This is a fresh HQ product direction, not a compatibility pass over the previous standalone posting workflow.
+This is not a patch of the previous standalone RGE platform. The product root is **ReemTeam HQ**. The RGE module inside it is a completely new **RGE Growth Engine** that turns Game Intelligence Signals into Growth Plays.
 
 ## Product Language
 
@@ -10,9 +10,18 @@ This is a fresh HQ product direction, not a compatibility pass over the previous
 - Intelligence layer: Game Intelligence
 - Growth work item: Growth Play
 - Content workspace: Content Studio
-- RGE module name: RGE Growth Engine
+- Growth module: RGE Growth Engine
 
-Avoid old workflow framing such as treating every recommendation as a social post. A Growth Play can recommend content, promos, notifications, event boosts, table priority changes, support alerts, referral pushes, or admin action.
+Avoid old workflow language. A Growth Play is not always a social post. It can recommend creating content, promoting a crib, filling a table, boosting an event, sending notifications, pushing referrals, reactivating users, alerting admins, or changing table promotion priority.
+
+## Monorepo Structure
+
+- `apps/hq-api`: ReemTeam HQ API and backend module surface
+- `apps/hq-dashboard`: premium dark command-center dashboard shell
+- `packages/shared`: HQ contracts and product language
+- `packages/game-rules`: ReemTeam gameplay concepts, special wins, and signal definitions
+- `packages/intelligence`: Game Intelligence and the new RGE Growth Engine scoring logic
+- `packages/ui`: shared visual tokens
 
 ## Core Modules
 
@@ -31,24 +40,26 @@ Avoid old workflow framing such as treating every recommendation as a social pos
 13. Analytics
 14. System Health
 
-## Intelligence Pipeline
+## Pipeline
 
 HQ Data -> Game Intelligence Signals -> Growth Plays -> Operator Action -> Content/Promo/Event/User Action -> Performance Result -> Learning Feedback
 
-## Phase Plan
+## Phase 1 Scope Now In Repo
 
-Phase 1 establishes auth/roles, the Command Center shell, Users CRUD, CRM profile, Admin action log, and System Health shell.
+- Fresh HQ repo structure inside the existing `RGE` git repo
+- Command Center API shell
+- Users/CRM profile shell
+- Cribs, Tables, Events shell
+- Game Intelligence signal API
+- New RGE Growth Engine package and Growth Plays API
+- Content Studio shell
+- System Health shell
+- Dashboard shell that presents ReemTeam HQ as the product
 
-Phase 2 adds Crib CRUD, Table CRUD, Event CRUD, Game session viewer, and Leaderboard viewer.
+## Guardrails
 
-Phase 3 adds GameEvent ingestion, GameIntelligenceSignal, GrowthPlay, scoring, and the required "Why this?" explanation.
-
-Phase 4 adds the RGE Growth Plays dashboard, Campaigns, Content Studio, caption generation, visual presets, approval flow, and calendar.
-
-Phase 5 adds referrals, in-app promo actions, push notification support, automation rules, performance learning, and recommended next actions.
-
-## First Repo Pass
-
-This repo now contains HQ-native domain constants in `src/hq/domain.ts`, blueprint API support in `src/services/hq/hqBlueprintService.ts`, and fresh Mongoose models under `src/db/models/hq`.
-
-The existing standalone RGE implementation remains available while routes and UI can migrate toward the HQ module names and data contracts.
+- New platform code lives in `apps/` and `packages/`.
+- The RGE Growth Engine inside HQ is new code in `packages/intelligence`.
+- Do not import the previous standalone RGE services into the new HQ module.
+- Do not use "opportunities" as product language for new work; use Growth Plays.
+- Do not make RGE the product shell; ReemTeam HQ is the product shell.
