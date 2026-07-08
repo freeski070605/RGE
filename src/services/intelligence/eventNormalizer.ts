@@ -29,6 +29,7 @@ export type NormalizedEventInput = {
 
 const signalToEventType: Record<string, string> = {
   reem_moment: 'reem_achieved',
+  promo_table_active: 'promo_table_active',
   big_payout: 'big_payout',
   high_stakes_win: 'high_stakes_win',
   win_streak: 'player_streak_changed',
@@ -85,7 +86,13 @@ const normalizeLegacySignal = (signal: any): NormalizedEventInput => {
     payoutMultiplier: normalizeNumber(metadata.payoutMultiplier),
     handResult: (metadata.handResult as Record<string, unknown>) ?? {},
     winType: String(metadata.winType ?? signalToWinType[signalType] ?? ''),
-    participants: Array.isArray(metadata.participants) ? metadata.participants : [],
+    participants: Array.isArray(metadata.participants)
+      ? metadata.participants
+      : Array.isArray(metadata.players)
+        ? metadata.players
+        : Array.isArray(metadata.aiPlayers)
+          ? metadata.aiPlayers
+          : [],
     playerBeforeStats: (metadata.playerBeforeStats as Record<string, unknown>) ?? {},
     playerAfterStats: (metadata.playerAfterStats as Record<string, unknown>) ?? {},
     leaderboardMovement: (metadata.leaderboardMovement as Record<string, unknown>) ?? {
@@ -131,12 +138,51 @@ const normalizeV3Record = (record: any): NormalizedEventInput => ({
   raw: record
 });
 
+const normalizeFeedTable = (table: any): NormalizedEventInput => {
+  const tableId = String(table.tableId ?? table._id ?? table.id ?? '');
+  const players = Array.isArray(table.players) ? table.players : [];
+  const aiPlayers = players.filter((player: any) => player?.isAI);
+
+  return {
+    eventId: `table:${tableId}:promo-active`,
+    eventType: table.isPromo ? 'promo_table_active' : 'table_state',
+    occurredAt: normalizeDate(table.updatedAt ?? table.createdAt),
+    tableId,
+    cribId: tableId || undefined,
+    cribName: table.name,
+    stake: normalizeNumber(table.stake),
+    mode: table.mode,
+    matchId: table.currentMatchId ?? undefined,
+    participants: players,
+    handResult: {},
+    winType: '',
+    playerBeforeStats: {},
+    playerAfterStats: {},
+    leaderboardMovement: {},
+    visibilitySafe: true,
+    sourceVersion: 'backend-table',
+    raw: {
+      ...table,
+      aiPlayerCount: aiPlayers.length
+    }
+  };
+};
+
 export const normalizeBackendFeedRecords = (feed: any): NormalizedEventInput[] => {
   const rawEvents = Array.isArray(feed?.events) ? feed.events : [];
   const rawSignals = Array.isArray(feed?.signals) ? feed.signals : [];
+  const promoSignalTableIds = new Set(
+    rawSignals
+      .filter((signal: any) => signal?.signalType === 'promo_table_active' && signal?.tableId)
+      .map((signal: any) => String(signal.tableId))
+  );
+  const rawTables = Array.isArray(feed?.tables)
+    ? feed.tables.filter((table: any) => table?.isPromo && !promoSignalTableIds.has(String(table.tableId ?? table._id ?? table.id ?? '')))
+    : [];
 
   return [
     ...rawEvents.map(normalizeV3Record),
+    ...rawTables.map(normalizeFeedTable),
     ...rawSignals.map(normalizeLegacySignal)
   ].filter((event) => event.eventId && event.eventType);
 };

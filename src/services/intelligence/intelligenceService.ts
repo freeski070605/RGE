@@ -37,6 +37,8 @@ type BackendFeed = {
   summary: {
     totalPlayers: number;
     totalCompletedMatches: number;
+    totalTables?: number;
+    totalPromoTables?: number;
     totalSignals: number;
   };
   players: Array<{
@@ -58,6 +60,29 @@ type BackendFeed = {
       value: number;
       secondaryValue?: number;
       metadata?: Record<string, unknown>;
+    }>;
+  }>;
+  tables?: Array<{
+    tableId: string;
+    name: string;
+    mode?: string;
+    stake?: number;
+    status?: string;
+    isPrivate?: boolean;
+    isPromo?: boolean;
+    minPlayers?: number;
+    maxPlayers?: number;
+    currentPlayerCount?: number;
+    activeContestId?: string | null;
+    currentMatchId?: string | null;
+    createdAt?: string | null;
+    updatedAt?: string | null;
+    players?: Array<{
+      playerId: string;
+      username: string;
+      isAI: boolean;
+      seat: number;
+      avatarUrl?: string;
     }>;
   }>;
   signals: Array<{

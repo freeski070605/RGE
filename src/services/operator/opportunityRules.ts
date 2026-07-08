@@ -176,6 +176,22 @@ const opportunityBlueprints: Record<string, OpportunityBlueprint> = {
     hook: 'Show the result, then the VIP context.',
     templateRecommendation: 'VIP Signal'
   },
+  promo_table_active: {
+    opportunityType: 'promo_table_active',
+    title: (_player, signal) => `${signal.tableName || 'Promo Content Table'} is ready for a promo story`,
+    whyItMatters: (_player, signal) => {
+      const aiPlayers = Array.isArray(signal.metadata?.aiPlayers) ? signal.metadata.aiPlayers.length : undefined;
+      return `The promo table is live with ${aiPlayers ?? signal.amount ?? 'AI'} players, giving RGE a controlled gameplay setup it can turn into content immediately.`;
+    },
+    angle: 'Frame the AI-player matchup as a live table prompt and invite players to watch or jump into the next real game.',
+    format: 'story',
+    platforms: ['instagram', 'story'],
+    goal: 'engagement',
+    audience: 'active_players',
+    cta: 'Ask viewers which AI player they would back at the table.',
+    hook: 'Open with the promo table name, then show the AI matchup.',
+    templateRecommendation: 'Promo Table Pulse'
+  },
   referral_momentum: {
     opportunityType: 'referral_momentum',
     title: (player, signal) => `${player} is bringing new energy into ReemTeam`,

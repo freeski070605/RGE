@@ -20,6 +20,7 @@ const eventToIndicatorType: Record<string, string> = {
   wallet_credit_awarded: 'wallet_credit_momentum',
   stake_tier_moved: 'stake_tier_heating_up',
   table_filled: 'table_filling_fast',
+  promo_table_active: 'promo_table_active',
   event_table_active: 'hot_crib'
 };
 
@@ -43,11 +44,19 @@ const scorePartsForEvent = (event: any, indicatorType: string) => {
   return {
     gameplayIntensity: clamp(Math.max(baseGameplay, highStake, payoutValue)),
     payoutValue,
-    contentPotential: clamp(['reem_moment', 'caught_drop', 'hot_crib', 'leaderboard_jump'].includes(indicatorType) ? 86 : 62),
+    contentPotential: clamp(['reem_moment', 'caught_drop', 'hot_crib', 'leaderboard_jump', 'promo_table_active'].includes(indicatorType) ? 86 : 62),
     socialProof: clamp(indicatorType.includes('leaderboard') || indicatorType.includes('referral') ? 86 : event.cribId ? 65 : 48),
     novelty: clamp(['auto_win_50_47', 'first_turn_41', 'first_turn_lowball', 'caught_drop'].includes(indicatorType) ? 90 : 58),
-    businessImpact: clamp(internalIndicatorTypes.has(indicatorType) || indicatorType.includes('referral') ? 85 : highStake > 60 ? 65 : 35),
-    playerRelevance: event.playerId ? 68 : event.cribId ? 52 : 30,
+    businessImpact: clamp(
+      indicatorType === 'promo_table_active'
+        ? 78
+        : internalIndicatorTypes.has(indicatorType) || indicatorType.includes('referral')
+          ? 85
+          : highStake > 60
+            ? 65
+            : 35
+    ),
+    playerRelevance: event.playerId ? 68 : event.cribId ? 52 : indicatorType === 'promo_table_active' ? 58 : 30,
     confidence: event.visibilitySafe ? 72 : 42
   };
 };
@@ -69,12 +78,16 @@ const titleFor = (indicatorType: string, event: any) => {
     returning_player_heat: `${player} returned hot`,
     hot_crib: `${crib} is heating up`,
     table_filling_fast: `${crib} table is filling fast`,
+    promo_table_active: `${crib} promo table is live with AI players`,
     stake_tier_heating_up: `$${event.stake || 'Higher'} games are heating up`
   };
   return labels[indicatorType] ?? `${player} created a ReemTeam moment`;
 };
 
 const recommendationFor = (indicatorType: string) => {
+  if (indicatorType === 'promo_table_active') {
+    return { format: 'story', platforms: ['story', 'instagram'], angle: 'Show the promo table matchup and turn the AI players into a quick content prompt.' };
+  }
   if (indicatorType === 'hot_crib' || indicatorType === 'table_filling_fast') {
     return { format: 'story', platforms: ['story', 'instagram'], angle: 'Show the active crib and invite players to jump in.' };
   }
@@ -238,7 +251,9 @@ const candidateFromIndicator = async (indicator: any) => {
         stake: indicator.stake,
         title: titleFor(indicator.indicatorType, event ?? indicator),
         whyItMatters:
-          indicator.indicatorType === 'hot_crib'
+          indicator.indicatorType === 'promo_table_active'
+            ? 'Promo table activity gives RGE ready-made gameplay context, named AI players, and a low-friction social prompt.'
+            : indicator.indicatorType === 'hot_crib'
             ? 'Crib activity is a high-value prompt to get more players into active rooms.'
             : 'This is a concrete ReemTeam gameplay moment with enough context to build content around.',
         recommendedAngle: recommendation.angle,
