@@ -454,3 +454,90 @@ export type AssetRecord = {
   createdAt: string;
   updatedAt?: string;
 };
+
+export type HqModuleReadinessView = {
+  modules: Array<{
+    id: string;
+    status: string;
+    detail: string;
+    counts?: Record<string, number>;
+  }>;
+};
+
+export type HqUserRecord = {
+  id: string;
+  username: string;
+  displayName: string;
+  email: string | null;
+  status: string;
+  role: string;
+  profile: {
+    tags: string[];
+    lastActiveAt: string | null;
+    gamesPlayed: number;
+    wins: number;
+    losses: number;
+    reems: number;
+    drops: number;
+    caughtDrops: number;
+    averageStake: number;
+    highestStake: number;
+    referralCount: number;
+    walletSummary: Record<string, number>;
+    riskFlags: string[];
+  } | null;
+};
+
+export type HqCribRecord = {
+  id: string;
+  cribName: string;
+  description: string;
+  stakeTier: string;
+  theme: string;
+  status: string;
+  featured: boolean;
+  growthPriority: number;
+  eventEligible: boolean;
+  tableCount: number;
+};
+
+export type HqTableRecord = {
+  id: string;
+  tableName: string;
+  cribId: string | null;
+  cribName: string | null;
+  stake: number;
+  maxSeats: number;
+  status: string;
+  visibility: string;
+  eventTable: boolean;
+  aiFillEnabled: boolean;
+  minimumBalance: number;
+  ruleset: string;
+  theme: string;
+  priority: number;
+};
+
+export type HqEventRecord = {
+  id: string;
+  eventName: string;
+  eventType: string;
+  startTime: string;
+  endTime: string;
+  status: string;
+  contentGoal: string;
+  growthGoal: string;
+  stakeRange: { min?: number; max?: number };
+};
+
+export type HqGameIntelligenceSignalRecord = {
+  id: string;
+  signalType: string;
+  source: string;
+  sourceId: string;
+  summary: string;
+  confidence: number;
+  occurredAt: string;
+  status: string;
+  details: Record<string, unknown>;
+};

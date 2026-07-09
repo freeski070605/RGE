@@ -27,6 +27,12 @@ import {
   CommandCenterView,
   ContentItemRecord,
   GrowthLoopsView,
+  HqCribRecord,
+  HqEventRecord,
+  HqGameIntelligenceSignalRecord,
+  HqModuleReadinessView,
+  HqTableRecord,
+  HqUserRecord,
   LibraryView,
   MediaDiagnosticsView,
   OperatorRecord,
@@ -42,6 +48,21 @@ import { StatusPill } from './StatusPill'
 
 type DashboardToast = { type: 'success' | 'error'; message: string } | null
 type WorkspaceTab = 'today' | 'create' | 'review' | 'library' | 'system'
+type HqModuleId =
+  | 'command_center'
+  | 'crm'
+  | 'users'
+  | 'tables'
+  | 'cribs'
+  | 'events'
+  | 'game_intelligence'
+  | 'rge_growth_engine'
+  | 'content_studio'
+  | 'referrals'
+  | 'wallet_ops'
+  | 'support'
+  | 'analytics'
+  | 'system_health'
 type DraftActionKey = 'copy' | 'media' | 'approve' | 'schedule' | 'publish' | 'save'
 
 type NextBestAction = {
@@ -196,13 +217,41 @@ function EmptyState(input: {
   )
 }
 
+const hqModules: Array<{
+  id: HqModuleId
+  label: string
+  workspace?: WorkspaceTab
+}> = [
+  { id: 'command_center', label: 'Command Center', workspace: 'today' },
+  { id: 'crm', label: 'CRM' },
+  { id: 'users', label: 'Users' },
+  { id: 'tables', label: 'Tables' },
+  { id: 'cribs', label: 'Cribs' },
+  { id: 'events', label: 'Events' },
+  { id: 'game_intelligence', label: 'Game Intelligence' },
+  { id: 'rge_growth_engine', label: 'RGE Growth Engine', workspace: 'create' },
+  { id: 'content_studio', label: 'Content Studio', workspace: 'review' },
+  { id: 'referrals', label: 'Referrals', workspace: 'system' },
+  { id: 'wallet_ops', label: 'Wallet/Ops' },
+  { id: 'support', label: 'Support' },
+  { id: 'analytics', label: 'Analytics' },
+  { id: 'system_health', label: 'System Health', workspace: 'system' }
+]
+
 export function AuthenticatedDashboard(input: {
   operator: OperatorRecord
   onLogout: () => Promise<void>
   globalToast: DashboardToast
   setGlobalToast: (toast: DashboardToast) => void
 }) {
+  const [activeModule, setActiveModule] = useState<HqModuleId>('command_center')
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('today')
+  const [moduleReadiness, setModuleReadiness] = useState<HqModuleReadinessView | null>(null)
+  const [hqUsers, setHqUsers] = useState<HqUserRecord[]>([])
+  const [hqCribs, setHqCribs] = useState<HqCribRecord[]>([])
+  const [hqTables, setHqTables] = useState<HqTableRecord[]>([])
+  const [hqEvents, setHqEvents] = useState<HqEventRecord[]>([])
+  const [hqSignals, setHqSignals] = useState<HqGameIntelligenceSignalRecord[]>([])
   const [commandCenter, setCommandCenter] = useState<CommandCenterView | null>(null)
   const [opportunities, setOpportunities] = useState<OpportunityRecord[]>([])
   const [pipeline, setPipeline] = useState<PipelineView | null>(null)
@@ -241,7 +290,13 @@ export function AuthenticatedDashboard(input: {
         systemHealthData,
         systemIntegrityData,
         workersStatusData,
-        mediaDiagnosticsData
+        mediaDiagnosticsData,
+        moduleReadinessData,
+        hqUsersData,
+        hqCribsData,
+        hqTablesData,
+        hqEventsData,
+        hqSignalsData
       ] = await Promise.all([
         dashboardApi.getCommandCenter(),
         dashboardApi.getOpportunities(),
@@ -253,9 +308,21 @@ export function AuthenticatedDashboard(input: {
         dashboardApi.getSystemHealth(),
         dashboardApi.getSystemIntegrity(),
         dashboardApi.getWorkersStatus(),
-        dashboardApi.getMediaDiagnostics()
+        dashboardApi.getMediaDiagnostics(),
+        dashboardApi.getHqModuleReadiness(),
+        dashboardApi.getHqUsers(),
+        dashboardApi.getHqCribs(),
+        dashboardApi.getHqTables(),
+        dashboardApi.getHqEvents(),
+        dashboardApi.getHqGameIntelligenceSignals()
       ])
 
+      setModuleReadiness(moduleReadinessData)
+      setHqUsers(hqUsersData)
+      setHqCribs(hqCribsData)
+      setHqTables(hqTablesData)
+      setHqEvents(hqEventsData)
+      setHqSignals(hqSignalsData)
       setCommandCenter(commandCenterData)
       setOpportunities(opportunitiesData)
       setPipeline(pipelineData)
@@ -329,6 +396,17 @@ export function AuthenticatedDashboard(input: {
     }
   }
 
+  const selectHqModule = (moduleId: HqModuleId) => {
+    const module = hqModules.find((entry) => entry.id === moduleId)
+    setActiveModule(moduleId)
+    if (module?.workspace) {
+      setActiveTab(module.workspace)
+    }
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+  }
+
   const runSync = async () => {
     await runBusy('sync-intelligence', async () => {
       await dashboardApi.syncIntelligence({ mode: 'sync' })
@@ -379,6 +457,31 @@ export function AuthenticatedDashboard(input: {
     () => opportunities.length === 0 && (pipeline?.items.length ?? 0) === 0,
     [opportunities.length, pipeline?.items.length]
   )
+
+  const readinessByModule = useMemo(
+    () => new Map((moduleReadiness?.modules ?? []).map((module) => [module.id, module])),
+    [moduleReadiness]
+  )
+
+  const getModuleCount = (moduleId: HqModuleId) => {
+    if (moduleId === 'command_center') return globalStatusCounts.needsReview + globalStatusCounts.readyToPublish
+    if (moduleId === 'crm' || moduleId === 'users') return hqUsers.length
+    if (moduleId === 'tables') return hqTables.length
+    if (moduleId === 'cribs') return hqCribs.length
+    if (moduleId === 'events') return hqEvents.length
+    if (moduleId === 'game_intelligence') return hqSignals.length
+    if (moduleId === 'rge_growth_engine') return opportunities.length
+    if (moduleId === 'content_studio') return pipeline?.items.length ?? 0
+    if (moduleId === 'referrals') return growthLoops?.summary.referralCodes ?? 0
+    if (moduleId === 'analytics') return performance?.totals.clicks ?? 0
+    if (moduleId === 'system_health') return systemIntegrity?.issues.length ?? 0
+    return readinessByModule.get(moduleId)?.counts
+      ? Object.values(readinessByModule.get(moduleId)?.counts ?? {}).reduce((sum, value) => sum + value, 0)
+      : 0
+  }
+
+  const activeModuleMeta = hqModules.find((module) => module.id === activeModule) ?? hqModules[0]
+  const activeModuleReadiness = readinessByModule.get(activeModule)
 
   const nextBestAction = useMemo<NextBestAction>(() => {
     const criticalIssue = systemIntegrity?.issues.find((issue) => issue.severity === 'critical')
@@ -787,6 +890,235 @@ export function AuthenticatedDashboard(input: {
             </div>
           </div>
         </header>
+
+        <section className="hq-module-surface" aria-label="ReemTeam HQ modules">
+          <div className="workspace-card hq-module-command">
+            <div className="workspace-card__header">
+              <div>
+                <span className="workspace-card__eyebrow">HQ platform</span>
+                <h2>{activeModuleMeta.label}</h2>
+              </div>
+              <StatusPill label={activeModuleReadiness?.status || 'connected'} />
+            </div>
+            <p className="workspace-card__body-copy">
+              {activeModuleReadiness?.detail ||
+                'This HQ module is part of the command-center surface. Select a module to inspect its live data and operator actions.'}
+            </p>
+
+            <div className="hq-module-nav">
+              {hqModules.map((module) => (
+                <button
+                  key={module.id}
+                  className={`hq-module-button ${activeModule === module.id ? 'hq-module-button--active' : ''}`}
+                  onClick={() => selectHqModule(module.id)}
+                >
+                  <span>{module.label}</span>
+                  <strong>{getModuleCount(module.id)}</strong>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="workspace-card hq-module-detail">
+            <div className="workspace-card__header">
+              <div>
+                <span className="workspace-card__eyebrow">Live module data</span>
+                <h2>{activeModuleMeta.label} is connected</h2>
+              </div>
+              <button className="mini-button" onClick={() => void refreshAll()} disabled={isLoading}>
+                <RefreshCw size={16} />
+                Refresh
+              </button>
+            </div>
+
+            {activeModule === 'command_center' ? (
+              <div className="summary-list">
+                <div className="summary-list__item">
+                  <span>Growth Plays</span>
+                  <strong>{String(opportunities.length)}</strong>
+                </div>
+                <div className="summary-list__item">
+                  <span>Drafts in pipeline</span>
+                  <strong>{String(pipeline?.items.length ?? 0)}</strong>
+                </div>
+                <div className="summary-list__item">
+                  <span>Needs review</span>
+                  <strong>{String(commandCenter?.needsReview.length ?? 0)}</strong>
+                </div>
+                <div className="summary-list__item">
+                  <span>System issues</span>
+                  <strong>{String(systemIntegrity?.issues.length ?? 0)}</strong>
+                </div>
+              </div>
+            ) : null}
+
+            {activeModule === 'crm' || activeModule === 'users' ? (
+              <div className="queue-list queue-list--compact">
+                {hqUsers.slice(0, 6).map((user) => (
+                  <div key={user.id} className="queue-item queue-item--static">
+                    <div>
+                      <div className="chip-row">
+                        <StatusPill label={user.status} />
+                        <StatusPill label={user.role} />
+                      </div>
+                      <strong>{user.displayName}</strong>
+                      <p>
+                        {user.username} - {user.profile?.gamesPlayed ?? 0} games, {user.profile?.reems ?? 0} Reems
+                      </p>
+                    </div>
+                  </div>
+                ))}
+                {!hqUsers.length ? (
+                  <EmptyState
+                    title="No HQ users loaded"
+                    description="The CRM and Users modules are wired, but this environment does not have HQ user records yet."
+                    icon={<Users size={18} />}
+                  />
+                ) : null}
+              </div>
+            ) : null}
+
+            {activeModule === 'cribs' ? (
+              <div className="queue-list queue-list--compact">
+                {hqCribs.map((crib) => (
+                  <div key={crib.id} className="queue-item queue-item--static">
+                    <div>
+                      <div className="chip-row">
+                        <StatusPill label={crib.status} />
+                        {crib.featured ? <StatusPill label="featured" /> : null}
+                      </div>
+                      <strong>{crib.cribName}</strong>
+                      <p>
+                        Priority {crib.growthPriority} - {crib.tableCount} table{crib.tableCount === 1 ? '' : 's'} - {crib.stakeTier}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            {activeModule === 'tables' ? (
+              <div className="queue-list queue-list--compact">
+                {hqTables.map((table) => (
+                  <div key={table.id} className="queue-item queue-item--static">
+                    <div>
+                      <div className="chip-row">
+                        <StatusPill label={table.status} />
+                        <StatusPill label={table.visibility} />
+                      </div>
+                      <strong>{table.tableName}</strong>
+                      <p>
+                        {table.cribName || 'No crib'} - stake {table.stake} - priority {table.priority}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            {activeModule === 'events' ? (
+              <div className="queue-list queue-list--compact">
+                {hqEvents.map((event) => (
+                  <div key={event.id} className="queue-item queue-item--static">
+                    <div>
+                      <div className="chip-row">
+                        <StatusPill label={event.status} />
+                        <StatusPill label={event.eventType} />
+                      </div>
+                      <strong>{event.eventName}</strong>
+                      <p>
+                        {fmtDate(event.startTime)} - {event.growthGoal || event.contentGoal || 'No goal set'}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            {activeModule === 'game_intelligence' ? (
+              <div className="queue-list queue-list--compact">
+                {hqSignals.slice(0, 8).map((signal) => (
+                  <div key={signal.id} className="queue-item queue-item--static">
+                    <div>
+                      <div className="chip-row">
+                        <StatusPill label={signal.status} />
+                        <StatusPill label={signal.signalType} />
+                      </div>
+                      <strong>{signal.summary}</strong>
+                      <p>
+                        Confidence {Math.round(signal.confidence)} - {fmtDate(signal.occurredAt)}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+                {!hqSignals.length ? (
+                  <EmptyState
+                    title="No HQ signals loaded"
+                    description="Run intelligence sync or ingest HQ gameplay events to populate this module."
+                    actionLabel="Sync live feed"
+                    onAction={() => void runSync()}
+                    icon={<Sparkles size={18} />}
+                  />
+                ) : null}
+              </div>
+            ) : null}
+
+            {activeModule === 'rge_growth_engine' ? (
+              <div className="summary-list">
+                <div className="summary-list__item">
+                  <span>Open Growth Plays</span>
+                  <strong>{String(opportunities.filter((opportunity) => opportunity.operatorStatus === 'open').length)}</strong>
+                </div>
+                <div className="summary-list__item">
+                  <span>Top recommendation</span>
+                  <strong>{opportunities[0]?.headline || 'No Growth Plays yet'}</strong>
+                </div>
+                <button className="primary-button" onClick={() => goToTab('create')}>
+                  <Rocket size={16} />
+                  Open Growth Engine workspace
+                </button>
+              </div>
+            ) : null}
+
+            {activeModule === 'content_studio' ? (
+              <div className="summary-list">
+                <div className="summary-list__item">
+                  <span>Content items</span>
+                  <strong>{String(pipeline?.items.length ?? 0)}</strong>
+                </div>
+                <div className="summary-list__item">
+                  <span>Ready to publish</span>
+                  <strong>{String(commandCenter?.readyToScheduleOrPublish.length ?? 0)}</strong>
+                </div>
+                <button className="primary-button" onClick={() => goToTab('review')}>
+                  <ImageIcon size={16} />
+                  Open Content Studio
+                </button>
+              </div>
+            ) : null}
+
+            {['referrals', 'wallet_ops', 'support', 'analytics', 'system_health'].includes(activeModule) ? (
+              <div className="summary-list">
+                <div className="summary-list__item">
+                  <span>Referral codes</span>
+                  <strong>{String(growthLoops?.summary.referralCodes ?? 0)}</strong>
+                </div>
+                <div className="summary-list__item">
+                  <span>Clicks</span>
+                  <strong>{fmtCompact(performance?.totals.clicks ?? 0)}</strong>
+                </div>
+                <div className="summary-list__item">
+                  <span>Wallet ledger records</span>
+                  <strong>{String(readinessByModule.get('wallet_ops')?.counts?.walletLedger ?? 0)}</strong>
+                </div>
+                <div className="summary-list__item">
+                  <span>System issues</span>
+                  <strong>{String(systemIntegrity?.issues.length ?? 0)}</strong>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </section>
 
         <nav className="workspace-tabs" aria-label="Operator workspaces">
           {workspaceTabs.map((tab) => (

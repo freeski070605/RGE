@@ -5,6 +5,12 @@ import {
   CommandCenterView,
   ContentItemRecord,
   GrowthLoopsView,
+  HqCribRecord,
+  HqEventRecord,
+  HqGameIntelligenceSignalRecord,
+  HqModuleReadinessView,
+  HqTableRecord,
+  HqUserRecord,
   LibraryView,
   MediaDiagnosticsView,
   OperatorSessionResponse,
@@ -30,6 +36,13 @@ export const dashboardApi = {
   logout: async () => api.post('/auth/logout'),
   syncIntelligence: async (payload?: { days?: number; mode?: 'sync' | 'queue' }) =>
     (await api.post('/v2/intelligence/sync', payload ?? {})).data,
+  getHqModuleReadiness: async () => (await api.get<HqModuleReadinessView>('/hq/modules/readiness')).data,
+  getHqUsers: async () => (await api.get<HqUserRecord[]>('/hq/users')).data,
+  getHqCribs: async () => (await api.get<HqCribRecord[]>('/hq/cribs')).data,
+  getHqTables: async () => (await api.get<HqTableRecord[]>('/hq/tables')).data,
+  getHqEvents: async () => (await api.get<HqEventRecord[]>('/hq/events')).data,
+  getHqGameIntelligenceSignals: async () =>
+    (await api.get<HqGameIntelligenceSignalRecord[]>('/hq/game-intelligence/signals')).data,
   getCommandCenter: async () => (await api.get<CommandCenterView>('/command-center')).data,
   getOpportunities: async () => (await api.get<OpportunityRecord[]>('/growth-plays')).data,
   createContentItemFromOpportunity: async (opportunityId: string) =>

@@ -1625,6 +1625,59 @@ select:focus {
   flex-wrap: wrap;
 }
 
+.hq-module-surface {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(22rem, 0.95fr);
+  gap: 1rem;
+}
+
+.hq-module-command,
+.hq-module-detail {
+  align-self: start;
+}
+
+.hq-module-nav {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.7rem;
+  margin-top: 1rem;
+}
+
+.hq-module-button {
+  min-height: 4.5rem;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  display: grid;
+  align-content: space-between;
+  gap: 0.45rem;
+  padding: 0.8rem;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease,
+    background 180ms ease;
+}
+
+.hq-module-button:hover,
+.hq-module-button--active {
+  transform: translateY(-1px);
+  border-color: rgba(45, 212, 191, 0.55);
+  background: rgba(45, 212, 191, 0.12);
+}
+
+.hq-module-button span {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.hq-module-button strong {
+  font-size: 1.35rem;
+  font-family: 'Space Grotesk', 'Trebuchet MS', sans-serif;
+}
+
 .next-action-banner {
   border-radius: var(--radius-lg);
   padding: 1rem;
@@ -1904,6 +1957,7 @@ select:focus {
 
 @media (max-width: 1360px) {
   .workspace-layout,
+  .hq-module-surface,
   .review-board,
   .today-bottom-grid,
   .review-detail-grid,
@@ -1917,6 +1971,7 @@ select:focus {
   }
 
   .metric-strip,
+  .hq-module-nav,
   .queue-grid,
   .card-grid,
   .workflow-lane {
@@ -1930,9 +1985,11 @@ select:focus {
   }
 
   .operator-hero,
+  .hq-module-surface,
   .workspace-layout,
   .workspace-tabs,
   .metric-strip,
+  .hq-module-nav,
   .queue-grid,
   .today-bottom-grid,
   .review-detail-grid,
