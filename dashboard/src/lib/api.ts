@@ -8,6 +8,7 @@ import {
   HqCribRecord,
   HqEventRecord,
   HqGameIntelligenceSignalRecord,
+  HqGrowthPlayRecord,
   HqModuleReadinessView,
   HqTableRecord,
   HqUserRecord,
@@ -43,6 +44,9 @@ export const dashboardApi = {
   getHqEvents: async () => (await api.get<HqEventRecord[]>('/hq/events')).data,
   getHqGameIntelligenceSignals: async () =>
     (await api.get<HqGameIntelligenceSignalRecord[]>('/hq/game-intelligence/signals')).data,
+  getHqGrowthPlays: async () => (await api.get<HqGrowthPlayRecord[]>('/hq/rge/growth-plays')).data,
+  updateHqGrowthPlayStatus: async (growthPlayId: string, status: HqGrowthPlayRecord['status']) =>
+    (await api.patch<HqGrowthPlayRecord>(`/hq/rge/growth-plays/${growthPlayId}/status`, { status })).data,
   getCommandCenter: async () => (await api.get<CommandCenterView>('/command-center')).data,
   getOpportunities: async () => (await api.get<OpportunityRecord[]>('/growth-plays')).data,
   createContentItemFromOpportunity: async (opportunityId: string) =>

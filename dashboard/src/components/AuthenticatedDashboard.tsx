@@ -30,6 +30,7 @@ import {
   HqCribRecord,
   HqEventRecord,
   HqGameIntelligenceSignalRecord,
+  HqGrowthPlayRecord,
   HqModuleReadinessView,
   HqTableRecord,
   HqUserRecord,
@@ -252,6 +253,7 @@ export function AuthenticatedDashboard(input: {
   const [hqTables, setHqTables] = useState<HqTableRecord[]>([])
   const [hqEvents, setHqEvents] = useState<HqEventRecord[]>([])
   const [hqSignals, setHqSignals] = useState<HqGameIntelligenceSignalRecord[]>([])
+  const [hqGrowthPlays, setHqGrowthPlays] = useState<HqGrowthPlayRecord[]>([])
   const [commandCenter, setCommandCenter] = useState<CommandCenterView | null>(null)
   const [opportunities, setOpportunities] = useState<OpportunityRecord[]>([])
   const [pipeline, setPipeline] = useState<PipelineView | null>(null)
@@ -296,7 +298,8 @@ export function AuthenticatedDashboard(input: {
         hqCribsData,
         hqTablesData,
         hqEventsData,
-        hqSignalsData
+        hqSignalsData,
+        hqGrowthPlaysData
       ] = await Promise.all([
         dashboardApi.getCommandCenter(),
         dashboardApi.getOpportunities(),
@@ -314,7 +317,8 @@ export function AuthenticatedDashboard(input: {
         dashboardApi.getHqCribs(),
         dashboardApi.getHqTables(),
         dashboardApi.getHqEvents(),
-        dashboardApi.getHqGameIntelligenceSignals()
+        dashboardApi.getHqGameIntelligenceSignals(),
+        dashboardApi.getHqGrowthPlays()
       ])
 
       setModuleReadiness(moduleReadinessData)
@@ -323,6 +327,7 @@ export function AuthenticatedDashboard(input: {
       setHqTables(hqTablesData)
       setHqEvents(hqEventsData)
       setHqSignals(hqSignalsData)
+      setHqGrowthPlays(hqGrowthPlaysData)
       setCommandCenter(commandCenterData)
       setOpportunities(opportunitiesData)
       setPipeline(pipelineData)
@@ -470,7 +475,7 @@ export function AuthenticatedDashboard(input: {
     if (moduleId === 'cribs') return hqCribs.length
     if (moduleId === 'events') return hqEvents.length
     if (moduleId === 'game_intelligence') return hqSignals.length
-    if (moduleId === 'rge_growth_engine') return opportunities.length
+    if (moduleId === 'rge_growth_engine') return hqGrowthPlays.length || opportunities.length
     if (moduleId === 'content_studio') return pipeline?.items.length ?? 0
     if (moduleId === 'referrals') return growthLoops?.summary.referralCodes ?? 0
     if (moduleId === 'analytics') return performance?.totals.clicks ?? 0
@@ -1064,19 +1069,51 @@ export function AuthenticatedDashboard(input: {
             ) : null}
 
             {activeModule === 'rge_growth_engine' ? (
-              <div className="summary-list">
-                <div className="summary-list__item">
-                  <span>Open Growth Plays</span>
-                  <strong>{String(opportunities.filter((opportunity) => opportunity.operatorStatus === 'open').length)}</strong>
-                </div>
-                <div className="summary-list__item">
-                  <span>Top recommendation</span>
-                  <strong>{opportunities[0]?.headline || 'No Growth Plays yet'}</strong>
-                </div>
-                <button className="primary-button" onClick={() => goToTab('create')}>
-                  <Rocket size={16} />
-                  Open Growth Engine workspace
-                </button>
+              <div className="queue-list queue-list--compact">
+                {hqGrowthPlays.slice(0, 5).map((play) => (
+                  <div key={play.id} className="queue-item queue-item--static">
+                    <div>
+                      <div className="chip-row">
+                        <StatusPill label={play.status} />
+                        <StatusPill label={play.urgency} />
+                        <StatusPill label={play.playType} />
+                      </div>
+                      <strong>{play.title}</strong>
+                      <p>{play.whyItMatters}</p>
+                      <p>
+                        {play.recommendedAction} via {play.recommendedChannel} - score {Math.round(play.finalScore)}
+                      </p>
+                      {play.whyThis?.sourceSignals?.length || play.whyThis?.recommendedActionReason ? (
+                        <details className="explain-box">
+                          <summary>Why this?</summary>
+                          {play.whyThis.sourceSignals.length ? <p>{play.whyThis.sourceSignals.join(', ')}</p> : null}
+                          {play.whyThis.scoreBoosts.length ? (
+                            <p>Boosts: {play.whyThis.scoreBoosts.join(', ')}</p>
+                          ) : null}
+                          {play.whyThis.penalties.length ? <p>Penalties: {play.whyThis.penalties.join(', ')}</p> : null}
+                          {play.whyThis.campaignFit ? <p>{play.whyThis.campaignFit}</p> : null}
+                          {play.whyThis.recommendedActionReason ? <p>{play.whyThis.recommendedActionReason}</p> : null}
+                        </details>
+                      ) : null}
+                    </div>
+                  </div>
+                ))}
+                {!hqGrowthPlays.length ? (
+                  <div className="summary-list">
+                    <div className="summary-list__item">
+                      <span>Compatibility Growth Plays</span>
+                      <strong>{String(opportunities.filter((opportunity) => opportunity.operatorStatus === 'open').length)}</strong>
+                    </div>
+                    <div className="summary-list__item">
+                      <span>Top recommendation</span>
+                      <strong>{opportunities[0]?.headline || 'No native Growth Plays yet'}</strong>
+                    </div>
+                    <button className="primary-button" onClick={() => goToTab('create')}>
+                      <Rocket size={16} />
+                      Open Growth Engine workspace
+                    </button>
+                  </div>
+                ) : null}
               </div>
             ) : null}
 

@@ -541,3 +541,36 @@ export type HqGameIntelligenceSignalRecord = {
   status: string;
   details: Record<string, unknown>;
 };
+
+export type HqGrowthPlayRecord = {
+  id: string;
+  title: string;
+  goal: string;
+  playType: string;
+  sourceSignalIds: string[];
+  targetUserId: string | null;
+  targetCribId: string | null;
+  targetTableId: string | null;
+  targetEventId: string | null;
+  recommendedAction: string;
+  recommendedChannel: string;
+  recommendedFormat: string;
+  whyItMatters: string;
+  whyThis: {
+    sourceSignals: string[];
+    scoreBoosts: string[];
+    penalties: string[];
+    campaignFit: string;
+    recommendedActionReason: string;
+  };
+  urgency: string;
+  confidence: number;
+  estimatedValue: number;
+  scoreParts: Record<string, number>;
+  finalScore: number;
+  riskFlags: string[];
+  status: string;
+  expiresAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};

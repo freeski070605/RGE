@@ -111,6 +111,39 @@ const mapSignal = (signal: any) => ({
   updatedAt: signal.updatedAt
 });
 
+const mapGrowthPlay = (play: any) => ({
+  id: toId(play._id),
+  title: play.title,
+  goal: play.goal,
+  playType: play.playType,
+  sourceSignalIds: (play.sourceSignalIds ?? []).map(toId),
+  targetUserId: play.targetUserId ? toId(play.targetUserId) : null,
+  targetCribId: play.targetCribId ? toId(play.targetCribId) : null,
+  targetTableId: play.targetTableId ? toId(play.targetTableId) : null,
+  targetEventId: play.targetEventId ? toId(play.targetEventId) : null,
+  recommendedAction: play.recommendedAction,
+  recommendedChannel: play.recommendedChannel,
+  recommendedFormat: play.recommendedFormat,
+  whyItMatters: play.whyItMatters,
+  whyThis: play.whyThis ?? {
+    sourceSignals: [],
+    scoreBoosts: [],
+    penalties: [],
+    campaignFit: '',
+    recommendedActionReason: ''
+  },
+  urgency: play.urgency,
+  confidence: play.confidence,
+  estimatedValue: play.estimatedValue,
+  scoreParts: play.scoreParts ?? {},
+  finalScore: play.finalScore,
+  riskFlags: play.riskFlags ?? [],
+  status: play.status,
+  expiresAt: play.expiresAt ?? null,
+  createdAt: play.createdAt,
+  updatedAt: play.updatedAt
+});
+
 export const getCoreModuleReadiness = async () => {
   const [
     users,
@@ -297,4 +330,18 @@ export const listHqGameIntelligenceSignals = async (input?: { status?: string; l
   const query = input?.status ? { status: input.status } : {};
   const signals = await GameIntelligenceSignalModel.find(query).sort({ occurredAt: -1 }).limit(input?.limit ?? 50).lean();
   return signals.map(mapSignal);
+};
+
+export const listHqGrowthPlays = async (input?: { status?: string; limit?: number }) => {
+  const query = input?.status ? { status: input.status } : {};
+  const plays = await GrowthPlayModel.find(query).sort({ finalScore: -1, createdAt: -1 }).limit(input?.limit ?? 50).lean();
+  return plays.map(mapGrowthPlay);
+};
+
+export const updateHqGrowthPlayStatus = async (playId: string, status: string) => {
+  const play = await GrowthPlayModel.findByIdAndUpdate(playId, { $set: { status } }, { new: true, runValidators: true }).lean();
+  if (!play) {
+    throw new AppError('Growth Play not found', 404);
+  }
+  return mapGrowthPlay(play);
 };

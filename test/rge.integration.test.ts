@@ -33,6 +33,7 @@ type ModuleBag = {
   TableModel: any;
   HQEventModel: any;
   GameIntelligenceSignalModel: any;
+  GrowthPlayModel: any;
   syncRgeFeedV3: (input?: { days?: number; preloadedFeed?: any }) => Promise<any>;
   mongoose: typeof import('mongoose');
 };
@@ -210,7 +211,7 @@ before(async () => {
   const { WorkerHeartbeatModel } = await import('../src/db/models/WorkerHeartbeat');
   const { HQUserModel, UserProfileModel, AdminNoteModel } = await import('../src/db/models/hq/User');
   const { CribModel, TableModel } = await import('../src/db/models/hq/GameOperations');
-  const { GameIntelligenceSignalModel } = await import('../src/db/models/hq/GrowthIntelligence');
+  const { GameIntelligenceSignalModel, GrowthPlayModel } = await import('../src/db/models/hq/GrowthIntelligence');
   const { HQEventModel } = await import('../src/db/models/hq/Operations');
   const { syncRgeFeedV3 } = await import('../src/services/intelligence/rgeFeedV3Service');
 
@@ -238,6 +239,7 @@ before(async () => {
     TableModel,
     HQEventModel,
     GameIntelligenceSignalModel,
+    GrowthPlayModel,
     syncRgeFeedV3,
     mongoose: mongoose.default
   };
@@ -347,6 +349,48 @@ test('HQ core module APIs are database-backed and support operator actions', asy
     occurredAt: new Date(),
     status: 'new'
   });
+  const growthPlay = await modules.GrowthPlayModel.create({
+    title: 'Feature Crown Maya after the Friday Night Reem',
+    goal: 'Turn a high-stakes Reem into table joins and event energy.',
+    playType: 'gameplay_highlight',
+    sourceSignalIds: [],
+    targetUserId: userId,
+    targetCribId: cribId,
+    targetTableId: tableId,
+    targetEventId: eventId,
+    recommendedAction: 'Create a leaderboard card and push the Friday Night Reem table.',
+    recommendedChannel: 'Content Studio',
+    recommendedFormat: 'Leaderboard card',
+    whyItMatters: 'A visible Reem in Da Crown Room gives operators strong social proof for the event.',
+    whyThis: {
+      sourceSignals: ['reem_detected in Da Crown Room'],
+      scoreBoosts: ['gameplayIntensity', 'socialProof', 'recency'],
+      penalties: [],
+      campaignFit: 'Matches promote_friday_night_reem.',
+      recommendedActionReason: 'The table is active and the player is content_safe.'
+    },
+    urgency: 'high',
+    confidence: 96,
+    estimatedValue: 1800,
+    scoreParts: {
+      gameplayIntensity: 96,
+      businessValue: 80,
+      socialProof: 92,
+      urgency: 88,
+      contentPotential: 90,
+      campaignFit: 85,
+      novelty: 76,
+      recency: 95,
+      confidence: 96,
+      fatiguePenalty: 0,
+      duplicationPenalty: 0,
+      riskPenalty: 0
+    },
+    finalScore: 91,
+    riskFlags: [],
+    status: 'open',
+    expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000)
+  });
 
   const readiness = await apiJson('/api/hq/modules/readiness');
   assert.equal(readiness.status, 200);
@@ -422,6 +466,19 @@ test('HQ core module APIs are database-backed and support operator actions', asy
   const signals = await apiJson('/api/hq/game-intelligence/signals?status=new');
   assert.equal(signals.status, 200);
   assert.equal((signals.payload as any[])[0].summary, 'Crown Maya hit a Reem in Da Crown Room.');
+
+  const growthPlays = await apiJson('/api/hq/rge/growth-plays?status=open');
+  assert.equal(growthPlays.status, 200);
+  assert.equal((growthPlays.payload as any[])[0].title, 'Feature Crown Maya after the Friday Night Reem');
+  assert.equal((growthPlays.payload as any[])[0].playType, 'gameplay_highlight');
+  assert.equal((growthPlays.payload as any[])[0].whyThis.campaignFit, 'Matches promote_friday_night_reem.');
+
+  const actionedGrowthPlay = await apiJson(`/api/hq/rge/growth-plays/${growthPlay._id}/status`, {
+    method: 'PATCH',
+    body: { status: 'actioned' }
+  });
+  assert.equal(actionedGrowthPlay.status, 200);
+  assert.equal((actionedGrowthPlay.payload as any).status, 'actioned');
 });
 
 test('sync creates operator-facing opportunities and the content item lifecycle reaches the calendar', async () => {

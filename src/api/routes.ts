@@ -44,10 +44,12 @@ import {
   listHqCribs,
   listHqEvents,
   listHqGameIntelligenceSignals,
+  listHqGrowthPlays,
   listHqTables,
   listHqUsers,
   updateHqCrib,
   updateHqEvent,
+  updateHqGrowthPlayStatus,
   updateHqTable,
   updateHqUser
 } from '../services/hq/coreModuleService';
@@ -339,6 +341,13 @@ const listHqSignalsQuerySchema = z.object({
   status: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(100).optional()
 });
+const listHqGrowthPlaysQuerySchema = z.object({
+  status: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional()
+});
+const updateHqGrowthPlayStatusSchema = z.object({
+  status: z.enum(['open', 'in_progress', 'approved', 'actioned', 'dismissed', 'expired'])
+});
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1)
@@ -531,6 +540,23 @@ router.get(
   asyncHandler(async (req, res) => {
     const query = listHqSignalsQuerySchema.parse(req.query);
     res.json(await listHqGameIntelligenceSignals(query));
+  })
+);
+
+router.get(
+  '/hq/rge/growth-plays',
+  asyncHandler(async (req, res) => {
+    const query = listHqGrowthPlaysQuerySchema.parse(req.query);
+    res.json(await listHqGrowthPlays(query));
+  })
+);
+
+router.patch(
+  '/hq/rge/growth-plays/:growthPlayId/status',
+  asyncHandler(async (req, res) => {
+    const growthPlayId = z.string().parse(req.params.growthPlayId);
+    const body = updateHqGrowthPlayStatusSchema.parse(req.body ?? {});
+    res.json(await updateHqGrowthPlayStatus(growthPlayId, body.status));
   })
 );
 
