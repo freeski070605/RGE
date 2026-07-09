@@ -26,6 +26,13 @@ type ModuleBag = {
   OperatorSettingModel: any;
   AssetModel: any;
   WorkerHeartbeatModel: any;
+  HQUserModel: any;
+  UserProfileModel: any;
+  AdminNoteModel: any;
+  CribModel: any;
+  TableModel: any;
+  HQEventModel: any;
+  GameIntelligenceSignalModel: any;
   syncRgeFeedV3: (input?: { days?: number; preloadedFeed?: any }) => Promise<any>;
   mongoose: typeof import('mongoose');
 };
@@ -201,6 +208,10 @@ before(async () => {
   const { OperatorSettingModel } = await import('../src/db/models/OperatorSetting');
   const { AssetModel } = await import('../src/db/models/Asset');
   const { WorkerHeartbeatModel } = await import('../src/db/models/WorkerHeartbeat');
+  const { HQUserModel, UserProfileModel, AdminNoteModel } = await import('../src/db/models/hq/User');
+  const { CribModel, TableModel } = await import('../src/db/models/hq/GameOperations');
+  const { GameIntelligenceSignalModel } = await import('../src/db/models/hq/GrowthIntelligence');
+  const { HQEventModel } = await import('../src/db/models/hq/Operations');
   const { syncRgeFeedV3 } = await import('../src/services/intelligence/rgeFeedV3Service');
 
   modules = {
@@ -220,6 +231,13 @@ before(async () => {
     OperatorSettingModel,
     AssetModel,
     WorkerHeartbeatModel,
+    HQUserModel,
+    UserProfileModel,
+    AdminNoteModel,
+    CribModel,
+    TableModel,
+    HQEventModel,
+    GameIntelligenceSignalModel,
     syncRgeFeedV3,
     mongoose: mongoose.default
   };
@@ -249,6 +267,161 @@ after(async () => {
   await modules.disconnectDatabase();
   await mongoServer.stop();
   await fs.rm(testOutputDir, { recursive: true, force: true });
+});
+
+test('HQ core module APIs are database-backed and support operator actions', async () => {
+  const userId = new modules.mongoose.Types.ObjectId();
+  const cribId = new modules.mongoose.Types.ObjectId();
+  const tableId = new modules.mongoose.Types.ObjectId();
+  const eventId = new modules.mongoose.Types.ObjectId();
+
+  await modules.HQUserModel.create({
+    _id: userId,
+    username: 'crownmaya',
+    displayName: 'Crown Maya',
+    email: 'maya@example.com',
+    role: 'player',
+    status: 'active'
+  });
+  await modules.UserProfileModel.create({
+    userId,
+    displayName: 'Crown Maya',
+    tags: ['vip', 'hot_player', 'content_safe'],
+    gamesPlayed: 188,
+    wins: 104,
+    losses: 84,
+    reems: 9,
+    averageStake: 50,
+    walletSummary: {
+      balanceCents: 13800,
+      pendingCents: 0,
+      lifetimeCreditsCents: 42000
+    }
+  });
+  await modules.CribModel.create({
+    _id: cribId,
+    cribName: 'Da Crown Room',
+    description: 'High-stakes tables for VIPs and big Reem moments.',
+    stakeTier: 'high',
+    theme: 'crown',
+    status: 'active',
+    featured: true,
+    growthPriority: 94
+  });
+  await modules.TableModel.create({
+    _id: tableId,
+    tableName: 'Crown Room 4',
+    cribId,
+    stake: 100,
+    maxSeats: 4,
+    status: 'open',
+    visibility: 'public',
+    priority: 90
+  });
+  await modules.HQEventModel.create({
+    _id: eventId,
+    eventName: 'Friday Night Reem',
+    eventType: 'reem_chase',
+    startTime: new Date(Date.now() + 60 * 60 * 1000),
+    endTime: new Date(Date.now() + 4 * 60 * 60 * 1000),
+    eligibleCribs: [cribId],
+    eligibleTables: [tableId],
+    stakeRange: { min: 10, max: 250 },
+    rewardRules: { bonusCents: 500 },
+    leaderboardRules: { metric: 'reems' },
+    contentGoal: 'Generate social proof and in-app table joins.',
+    growthGoal: 'Increase Friday table activity.',
+    status: 'scheduled'
+  });
+  await modules.GameIntelligenceSignalModel.create({
+    signalType: 'reem_detected',
+    source: 'gameplay',
+    sourceId: 'round-1',
+    targetUserId: userId,
+    targetCribId: cribId,
+    targetTableId: tableId,
+    targetEventId: eventId,
+    summary: 'Crown Maya hit a Reem in Da Crown Room.',
+    details: { amountCents: 24500 },
+    confidence: 96,
+    occurredAt: new Date(),
+    status: 'new'
+  });
+
+  const readiness = await apiJson('/api/hq/modules/readiness');
+  assert.equal(readiness.status, 200);
+  assert.equal((readiness.payload as any).modules.find((row: any) => row.id === 'crm').counts.users, 1);
+  assert.equal((readiness.payload as any).modules.find((row: any) => row.id === 'game_intelligence').counts.hqSignals, 1);
+
+  const users = await apiJson('/api/hq/users?search=maya');
+  assert.equal(users.status, 200);
+  assert.equal((users.payload as any[]).length, 1);
+  assert.equal((users.payload as any[])[0].profile.reems, 9);
+
+  const suspended = await apiJson(`/api/hq/users/${userId}`, {
+    method: 'PATCH',
+    body: { status: 'suspended' }
+  });
+  assert.equal(suspended.status, 200);
+  assert.equal((suspended.payload as any).status, 'suspended');
+
+  const note = await apiJson(`/api/hq/users/${userId}/notes`, {
+    method: 'POST',
+    body: { note: 'Watch for VIP follow-up after event.', visibility: 'internal' }
+  });
+  assert.equal(note.status, 201);
+  assert.equal(await modules.AdminNoteModel.countDocuments({ userId }), 1);
+
+  const profile = await apiJson(`/api/hq/users/${userId}/profile`);
+  assert.equal(profile.status, 200);
+  assert.equal((profile.payload as any).notes[0].note, 'Watch for VIP follow-up after event.');
+
+  const cribs = await apiJson('/api/hq/cribs');
+  assert.equal(cribs.status, 200);
+  assert.equal((cribs.payload as any[])[0].tableCount, 1);
+
+  const updatedCrib = await apiJson(`/api/hq/cribs/${cribId}`, {
+    method: 'PATCH',
+    body: { growthPriority: 99, featured: false }
+  });
+  assert.equal((updatedCrib.payload as any).growthPriority, 99);
+  assert.equal((updatedCrib.payload as any).featured, false);
+
+  const tables = await apiJson(`/api/hq/tables?cribId=${cribId}`);
+  assert.equal(tables.status, 200);
+  assert.equal((tables.payload as any[])[0].cribName, 'Da Crown Room');
+
+  const updatedTable = await apiJson(`/api/hq/tables/${tableId}`, {
+    method: 'PATCH',
+    body: { status: 'active', priority: 98 }
+  });
+  assert.equal((updatedTable.payload as any).status, 'active');
+
+  const createdEvent = await apiJson('/api/hq/events', {
+    method: 'POST',
+    body: {
+      eventName: 'Lowball Ladder',
+      eventType: 'leaderboard',
+      startTime: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+      endTime: new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString(),
+      eligibleCribs: [String(cribId)],
+      eligibleTables: [String(tableId)],
+      status: 'draft'
+    }
+  });
+  assert.equal(createdEvent.status, 201);
+  assert.equal((createdEvent.payload as any).eventName, 'Lowball Ladder');
+
+  const updatedEvent = await apiJson(`/api/hq/events/${eventId}`, {
+    method: 'PATCH',
+    body: { status: 'running' }
+  });
+  assert.equal(updatedEvent.status, 200);
+  assert.equal((updatedEvent.payload as any).status, 'running');
+
+  const signals = await apiJson('/api/hq/game-intelligence/signals?status=new');
+  assert.equal(signals.status, 200);
+  assert.equal((signals.payload as any[])[0].summary, 'Crown Maya hit a Reem in Da Crown Room.');
 });
 
 test('sync creates operator-facing opportunities and the content item lifecycle reaches the calendar', async () => {

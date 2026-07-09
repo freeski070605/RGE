@@ -37,6 +37,21 @@ import {
 } from '../services/growth/opsService';
 import { createEventAndDraftPost } from '../services/data-layer/eventService';
 import {
+  createHqAdminNote,
+  createHqEvent,
+  getCoreModuleReadiness,
+  getHqUserProfile,
+  listHqCribs,
+  listHqEvents,
+  listHqGameIntelligenceSignals,
+  listHqTables,
+  listHqUsers,
+  updateHqCrib,
+  updateHqEvent,
+  updateHqTable,
+  updateHqUser
+} from '../services/hq/coreModuleService';
+import {
   getIntelligenceOverview,
   listLeaderboards,
   listPlayerSnapshots,
@@ -260,6 +275,70 @@ const selectVisualPresetSchema = z.object({
 const archiveContentItemSchema = z.object({
   reason: z.string().optional()
 });
+const listHqUsersQuerySchema = z.object({
+  status: z.string().optional(),
+  role: z.string().optional(),
+  search: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional()
+});
+const updateHqUserSchema = z.object({
+  status: z.enum(['active', 'disabled', 'suspended']).optional(),
+  role: z.enum(['owner', 'admin', 'operator', 'moderator', 'support', 'player']).optional()
+});
+const createAdminNoteSchema = z.object({
+  note: z.string().min(1),
+  visibility: z.enum(['internal', 'owner_only']).optional()
+});
+const listByStatusQuerySchema = z.object({
+  status: z.string().optional()
+});
+const listHqTablesQuerySchema = z.object({
+  status: z.string().optional(),
+  cribId: z.string().optional()
+});
+const updateHqCribSchema = z.object({
+  description: z.string().optional(),
+  stakeTier: z.string().optional(),
+  theme: z.string().optional(),
+  status: z.enum(['draft', 'active', 'paused', 'retired']).optional(),
+  featured: z.boolean().optional(),
+  growthPriority: z.number().optional(),
+  eventEligible: z.boolean().optional(),
+  visualStyle: z.record(z.string(), z.unknown()).optional()
+});
+const updateHqTableSchema = z.object({
+  tableName: z.string().min(1).optional(),
+  stake: z.number().optional(),
+  maxSeats: z.number().int().min(2).max(8).optional(),
+  status: z.enum(['open', 'active', 'paused', 'closed']).optional(),
+  visibility: z.enum(['public', 'private']).optional(),
+  eventTable: z.boolean().optional(),
+  aiFillEnabled: z.boolean().optional(),
+  minimumBalance: z.number().optional(),
+  ruleset: z.string().optional(),
+  theme: z.string().optional(),
+  priority: z.number().optional(),
+  featuredAt: z.string().datetime().nullable().optional()
+});
+const hqEventPayloadSchema = z.object({
+  eventName: z.string().min(1),
+  eventType: z.string().min(1),
+  startTime: z.string().datetime(),
+  endTime: z.string().datetime(),
+  eligibleCribs: z.array(z.string()).optional(),
+  eligibleTables: z.array(z.string()).optional(),
+  stakeRange: z.object({ min: z.number().optional(), max: z.number().optional() }).optional(),
+  rewardRules: z.record(z.string(), z.unknown()).optional(),
+  leaderboardRules: z.record(z.string(), z.unknown()).optional(),
+  contentGoal: z.string().optional(),
+  growthGoal: z.string().optional(),
+  status: z.enum(['draft', 'scheduled', 'running', 'completed', 'cancelled']).optional()
+});
+const updateHqEventSchema = hqEventPayloadSchema.partial();
+const listHqSignalsQuerySchema = z.object({
+  status: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional()
+});
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1)
@@ -280,6 +359,13 @@ router.get(
   '/hq/blueprint',
   asyncHandler(async (_req, res) => {
     res.json(getHqBlueprint());
+  })
+);
+
+router.get(
+  '/hq/modules/readiness',
+  asyncHandler(async (_req, res) => {
+    res.json(await getCoreModuleReadiness());
   })
 );
 
@@ -344,6 +430,107 @@ router.get(
   '/command-center',
   asyncHandler(async (_req, res) => {
     res.json(await getCommandCenter());
+  })
+);
+
+router.get(
+  '/hq/users',
+  asyncHandler(async (req, res) => {
+    const query = listHqUsersQuerySchema.parse(req.query);
+    res.json(await listHqUsers(query));
+  })
+);
+
+router.get(
+  '/hq/users/:userId/profile',
+  asyncHandler(async (req, res) => {
+    const userId = z.string().parse(req.params.userId);
+    res.json(await getHqUserProfile(userId));
+  })
+);
+
+router.patch(
+  '/hq/users/:userId',
+  asyncHandler(async (req, res) => {
+    const userId = z.string().parse(req.params.userId);
+    const body = updateHqUserSchema.parse(req.body ?? {});
+    res.json(await updateHqUser(userId, body));
+  })
+);
+
+router.post(
+  '/hq/users/:userId/notes',
+  asyncHandler(async (req, res) => {
+    const userId = z.string().parse(req.params.userId);
+    const body = createAdminNoteSchema.parse(req.body ?? {});
+    res.status(201).json(await createHqAdminNote({ userId, ...body }));
+  })
+);
+
+router.get(
+  '/hq/cribs',
+  asyncHandler(async (req, res) => {
+    const query = listByStatusQuerySchema.parse(req.query);
+    res.json(await listHqCribs(query));
+  })
+);
+
+router.patch(
+  '/hq/cribs/:cribId',
+  asyncHandler(async (req, res) => {
+    const cribId = z.string().parse(req.params.cribId);
+    const body = updateHqCribSchema.parse(req.body ?? {});
+    res.json(await updateHqCrib(cribId, body));
+  })
+);
+
+router.get(
+  '/hq/tables',
+  asyncHandler(async (req, res) => {
+    const query = listHqTablesQuerySchema.parse(req.query);
+    res.json(await listHqTables(query));
+  })
+);
+
+router.patch(
+  '/hq/tables/:tableId',
+  asyncHandler(async (req, res) => {
+    const tableId = z.string().parse(req.params.tableId);
+    const body = updateHqTableSchema.parse(req.body ?? {});
+    res.json(await updateHqTable(tableId, body));
+  })
+);
+
+router.get(
+  '/hq/events',
+  asyncHandler(async (req, res) => {
+    const query = listByStatusQuerySchema.parse(req.query);
+    res.json(await listHqEvents(query));
+  })
+);
+
+router.post(
+  '/hq/events',
+  asyncHandler(async (req, res) => {
+    const body = hqEventPayloadSchema.parse(req.body ?? {});
+    res.status(201).json(await createHqEvent(body));
+  })
+);
+
+router.patch(
+  '/hq/events/:eventId',
+  asyncHandler(async (req, res) => {
+    const eventId = z.string().parse(req.params.eventId);
+    const body = updateHqEventSchema.parse(req.body ?? {});
+    res.json(await updateHqEvent(eventId, body));
+  })
+);
+
+router.get(
+  '/hq/game-intelligence/signals',
+  asyncHandler(async (req, res) => {
+    const query = listHqSignalsQuerySchema.parse(req.query);
+    res.json(await listHqGameIntelligenceSignals(query));
   })
 );
 

@@ -2,14 +2,16 @@
   "name": "reemteam-hq",
   "version": "1.0.0",
   "description": "Private backend/admin command center for the ReemTeam ecosystem",
-  "main": "dist-hq/apps/hq-api/src/server.js",
+  "main": "dist/server.js",
   "scripts": {
-    "build": "tsc -p tsconfig.hq.json",
+    "build": "tsc -p tsconfig.json",
     "build:all": "npm run build && npm --prefix dashboard run build",
-    "start": "node dist-hq/apps/hq-api/src/server.js",
-    "dev": "tsx apps/hq-api/src/server.ts",
-    "hq:api:dev": "tsx apps/hq-api/src/server.ts",
-    "hq:api:build": "tsc -p tsconfig.hq.json",
+    "start": "node dist/server.js",
+    "dev": "tsx src/server.ts",
+    "worker:start": "node dist/workers/index.js",
+    "worker:dev": "tsx src/workers/index.ts",
+    "hq:api:dev": "tsx src/server.ts",
+    "hq:api:build": "tsc -p tsconfig.json",
     "test:integration": "tsx --test test/**/*.test.ts"
   },
   "engines": {
