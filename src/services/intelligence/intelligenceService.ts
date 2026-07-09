@@ -1,6 +1,9 @@
+import { createHash } from 'crypto';
 import { env } from '../../config/env';
 import { ContentIdeaModel } from '../../db/models/ContentIdea';
 import { GameSignalModel } from '../../db/models/GameSignal';
+import { CribModel, TableModel } from '../../db/models/hq/GameOperations';
+import { HQUserModel, UserProfileModel } from '../../db/models/hq/User';
 import { LeaderboardSnapshotModel } from '../../db/models/LeaderboardSnapshot';
 import { PlayerStatsDailyModel } from '../../db/models/PlayerStatsDaily';
 import { buildOpportunityDraftFromSignal, isOperatorFacingSignal } from '../operator/opportunityRules';
@@ -153,6 +156,235 @@ const scoreSignal = (signal: BackendFeed['signals'][number]) => ({
   overallPriorityScore: signal.scores?.overallPriorityScore ?? 50
 });
 
+const toMongoObjectIdString = (value: string) =>
+  /^[a-f\d]{24}$/i.test(value) ? value : createHash('sha1').update(value).digest('hex').slice(0, 24);
+
+const mapBackendRoleToHqRole = (role?: string) => {
+  if (['owner', 'admin', 'operator', 'moderator', 'support', 'player'].includes(role ?? '')) {
+    return role;
+  }
+
+  if (role === 'superadmin') {
+    return 'owner';
+  }
+
+  if (role === 'user') {
+    return 'player';
+  }
+
+  return 'player';
+};
+
+const getCribIdentityForBackendTable = (table: NonNullable<BackendFeed['tables']>[number]) => {
+  if (table.isPrivate) {
+    return {
+      cribName: 'Da Crown Room',
+      description: 'Invite-only crew tables, rivalries, and high-intent social play.',
+      stakeTier: 'private',
+      theme: 'crown',
+      growthPriority: 90
+    };
+  }
+
+  const stake = Number(table.stake ?? 0);
+  if (stake <= 1) {
+    return {
+      cribName: 'The Basement',
+      description: 'Fast hands and new-player friendly tables.',
+      stakeTier: 'low',
+      theme: 'basement',
+      growthPriority: 70
+    };
+  }
+
+  if (stake <= 10) {
+    return {
+      cribName: 'The Back Room',
+      description: 'Mid-stakes tables for players who know when to drop.',
+      stakeTier: 'mid',
+      theme: 'back_room',
+      growthPriority: 76
+    };
+  }
+
+  if (stake <= 50) {
+    return {
+      cribName: 'Kitchen Table',
+      description: 'Bigger swings, strong table talk, and visible momentum.',
+      stakeTier: 'high',
+      theme: 'kitchen_table',
+      growthPriority: 84
+    };
+  }
+
+  return {
+    cribName: 'Da Crown Room',
+    description: 'High-stakes tables for VIPs, Reems, and serious social proof.',
+    stakeTier: 'vip',
+    theme: 'crown',
+    growthPriority: 95
+  };
+};
+
+const mapBackendTableStatusToHq = (status?: string) => {
+  if (status === 'in-game') {
+    return 'active';
+  }
+
+  if (status === 'waiting') {
+    return 'open';
+  }
+
+  return 'open';
+};
+
+const syncHqCoreDataFromBackendFeed = async (feed: BackendFeed) => {
+  const latestWindow = '30d' as WindowKey;
+
+  const userOperations = feed.players.map((player) => {
+    const stats = player.windows?.[latestWindow] ?? player.windows?.['24h'];
+    const userId = toMongoObjectIdString(player.playerId);
+    return {
+      updateOne: {
+        filter: { _id: userId },
+        update: {
+          $setOnInsert: {
+            _id: userId
+          },
+          $set: {
+            username: player.username,
+            displayName: player.username,
+            status: 'active',
+            role: mapBackendRoleToHqRole((player as any).role)
+          }
+        },
+        upsert: true
+      }
+    };
+  });
+
+  const profileOperations = feed.players.map((player) => {
+    const stats = player.windows?.[latestWindow] ?? player.windows?.['24h'];
+    const userId = toMongoObjectIdString(player.playerId);
+    const tags = [
+      stats?.matchesPlayed ? null : 'new_player',
+      (stats?.wins ?? 0) >= 3 || (stats?.currentWinStreak ?? 0) >= 3 ? 'hot_player' : null,
+      player.vipStatus === 'ACTIVE' ? 'vip' : null,
+      (stats?.highestStakeWin ?? 0) >= 25 || (stats?.avgStake ?? 0) >= 25 ? 'high_stakes' : null,
+      (stats?.inviteCount ?? 0) >= 2 ? 'strong_referrer' : null,
+      (stats?.matchesPlayed ?? 0) === 0 ? 'inactive' : null,
+      (stats?.wins ?? 0) > 0 || (stats?.reems ?? 0) > 0 ? 'content_safe' : null
+    ].filter(Boolean);
+
+    return {
+      updateOne: {
+        filter: { userId },
+        update: {
+          $set: {
+            userId,
+            displayName: player.username,
+            contact: {},
+            tags,
+            lastActiveAt: feed.generatedAt ? new Date(feed.generatedAt) : new Date(),
+            gamesPlayed: stats?.matchesPlayed ?? 0,
+            wins: stats?.wins ?? 0,
+            losses: Math.max(0, (stats?.matchesPlayed ?? 0) - (stats?.wins ?? 0)),
+            reems: stats?.reems ?? 0,
+            drops: 0,
+            caughtDrops: stats?.caughtDropWins ?? 0,
+            averageStake: stats?.avgStake ?? 0,
+            highestStake: stats?.highestStakeWin ?? 0,
+            referralCount: stats?.inviteCount ?? 0,
+            walletSummary: {
+              balanceCents: 0,
+              pendingCents: 0,
+              lifetimeCreditsCents: Math.round((stats?.grossPayout ?? 0) * 100)
+            },
+            riskFlags: []
+          }
+        },
+        upsert: true
+      }
+    };
+  });
+
+  const cribByName = new Map<string, ReturnType<typeof getCribIdentityForBackendTable>>();
+  for (const table of feed.tables ?? []) {
+    const crib = getCribIdentityForBackendTable(table);
+    cribByName.set(crib.cribName, crib);
+  }
+
+  const cribDocs = await Promise.all(
+    [...cribByName.values()].map((crib) =>
+      CribModel.findOneAndUpdate(
+        { cribName: crib.cribName },
+        {
+          $set: {
+            ...crib,
+            status: 'active',
+            featured: crib.growthPriority >= 90,
+            eventEligible: true,
+            visualStyle: {
+              source: 'reemteam_frontend_crib_identity'
+            }
+          }
+        },
+        { upsert: true, new: true }
+      )
+    )
+  );
+  const cribIdByName = new Map(cribDocs.map((crib) => [crib.cribName, crib._id]));
+
+  const tableOperations = (feed.tables ?? []).map((table) => {
+    const crib = getCribIdentityForBackendTable(table);
+    const cribId = cribIdByName.get(crib.cribName);
+    const tableId = toMongoObjectIdString(table.tableId);
+    return {
+      updateOne: {
+        filter: { _id: tableId },
+        update: {
+          $setOnInsert: {
+            _id: tableId
+          },
+          $set: {
+            tableName: table.name,
+            cribId,
+            stake: table.stake ?? 0,
+            maxSeats: table.maxPlayers ?? 4,
+            status: mapBackendTableStatusToHq(table.status),
+            visibility: table.isPrivate ? 'private' : 'public',
+            eventTable: Boolean(table.activeContestId),
+            aiFillEnabled: Boolean(table.players?.some((player) => player.isAI)),
+            minimumBalance: table.stake ?? 0,
+            ruleset: table.mode ?? 'standard',
+            theme: crib.theme,
+            priority: Math.round((table.currentPlayerCount ?? 0) * 15 + (table.stake ?? 0) + crib.growthPriority),
+            featuredAt: table.isPromo ? new Date(table.updatedAt ?? feed.generatedAt) : undefined
+          }
+        },
+        upsert: true
+      }
+    };
+  });
+
+  if (userOperations.length) {
+    await HQUserModel.bulkWrite(userOperations as any);
+  }
+  if (profileOperations.length) {
+    await UserProfileModel.bulkWrite(profileOperations as any);
+  }
+  if (tableOperations.length) {
+    await TableModel.bulkWrite(tableOperations as any);
+  }
+
+  return {
+    hqUsers: userOperations.length,
+    hqProfiles: profileOperations.length,
+    hqCribs: cribDocs.length,
+    hqTables: tableOperations.length
+  };
+};
+
 export const syncGameIntelligence = async (days = env.RGE_SYNC_DAYS) => {
   const startedAt = Date.now();
   logInfo({
@@ -165,6 +397,7 @@ export const syncGameIntelligence = async (days = env.RGE_SYNC_DAYS) => {
 
   try {
     const feed = await fetchBackendFeed(days);
+    const hqCoreSync = await syncHqCoreDataFromBackendFeed(feed);
 
     const playerOperations = feed.players.flatMap((player) =>
       feed.windows.map((window) => ({
@@ -314,6 +547,7 @@ export const syncGameIntelligence = async (days = env.RGE_SYNC_DAYS) => {
       upsertedLeaderboards: feed.leaderboards.length,
       upsertedSignals: feed.signals.length,
       createdIdeas: ideaDocs.length,
+      hqCoreSync,
       v3
     };
 

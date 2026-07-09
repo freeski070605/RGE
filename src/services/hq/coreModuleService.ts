@@ -173,7 +173,7 @@ export const getCoreModuleReadiness = async () => {
 
   return {
     modules: [
-      { id: 'command_center', status: 'connected', detail: 'Aggregates live RGE workflow, health, and performance views.' },
+      { id: 'command_center', status: 'connected', detail: 'Aggregates live HQ operations, Growth Plays, health, and performance views.' },
       { id: 'crm', status: 'connected', detail: 'User profiles, tags, notes, wallet summaries, and action history are database-backed.', counts: { users, profiles, adminNotes, walletLedger } },
       { id: 'users', status: 'connected', detail: 'Users can be listed, inspected, and updated through HQ APIs.', counts: { users } },
       { id: 'tables', status: 'connected', detail: 'Tables are stored in Mongo and can be listed or updated.', counts: { tables } },

@@ -751,12 +751,39 @@ export const createMediaForVariant = async (variantId: string) => {
 };
 
 export const queueMediaForVariant = async (variantId: string) => {
-  const job = await enqueueMediaCreation({
-    targetType: 'variant',
-    variantId
-  });
-  await markVariantMediaQueued(variantId, String(job.id));
-  return job;
+  let jobId = '';
+  try {
+    const job = await enqueueMediaCreation({
+      targetType: 'variant',
+      variantId
+    });
+    jobId = String(job.id);
+  } catch (error) {
+    if (env.isProduction) {
+      throw error;
+    }
+
+    jobId = `inline-${variantId}`;
+    logWarn({
+      area: 'media',
+      action: 'queue-variant-media',
+      status: 'warning',
+      variantId,
+      error: error instanceof Error ? error.message : 'Media queue unavailable',
+      message: 'Media queue unavailable; rendering inline for local HQ development'
+    });
+  }
+
+  await markVariantMediaQueued(variantId, jobId);
+
+  if (!env.isProduction && env.NODE_ENV === 'development') {
+    await markVariantMediaProcessing(variantId, jobId);
+    await createMediaForVariant(variantId);
+  }
+
+  return {
+    id: jobId
+  };
 };
 
 const ensurePublishingJobInsight = async (job: any, variant: any, brief: any, idea: any) => {
