@@ -5,6 +5,7 @@
   "main": "dist-hq/apps/hq-api/src/server.js",
   "scripts": {
     "build": "tsc -p tsconfig.hq.json",
+    "build:all": "npm run build && npm --prefix dashboard run build",
     "start": "node dist-hq/apps/hq-api/src/server.js",
     "dev": "tsx apps/hq-api/src/server.ts",
     "hq:api:dev": "tsx apps/hq-api/src/server.ts",
