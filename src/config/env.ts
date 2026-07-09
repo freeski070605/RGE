@@ -37,7 +37,7 @@ const envSchema = z.object({
   RGE_INTERNAL_TOKEN: z.string().default(''),
   OPERATOR_EMAIL: z.string().email().default('ops@reemteam.local'),
   OPERATOR_PASSWORD: z.string().default('changeme'),
-  OPERATOR_NAME: z.string().default('ReemGrowth Operator'),
+  OPERATOR_NAME: z.string().default('ReemTeam HQ Operator'),
   JWT_SECRET: z.string().default('development-rge-secret'),
   AUTH_COOKIE_NAME: z.string().default('rge_operator_session'),
   AUTH_SESSION_TTL_HOURS: z.coerce.number().int().min(1).max(168).default(12),
