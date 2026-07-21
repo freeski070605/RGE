@@ -18,7 +18,10 @@
   "engines": {
     "node": ">=20.0.0"
   },
-  "devDependencies": {
+  "dependencies": {
     "typescript": "^5.9.3"
+  },
+  "optionalDependencies": {
+    "@rollup/rollup-linux-x64-gnu": "4.62.2"
   }
 }

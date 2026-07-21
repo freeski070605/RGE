@@ -15,9 +15,7 @@
     "react-dom": "^19.2.3",
     "lucide-react": "^0.562.0",
     "@reemteam/shared": "0.1.0",
-    "@reemteam/ui": "0.1.0"
-  },
-  "devDependencies": {
+    "@reemteam/ui": "0.1.0",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "typescript": "^5.9.3"

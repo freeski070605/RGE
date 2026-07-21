@@ -3,7 +3,7 @@ services:
     name: reemteam-hq
     env: node
     plan: starter
-    buildCommand: npm install && npm run build
+    buildCommand: npm ci --include=optional && npm run build
     startCommand: npm start
     healthCheckPath: /api/hq/system-health
     envVars:
