@@ -3,8 +3,42 @@ import { AdminActionLogModel, AdminNoteModel, HQUserModel, UserProfileModel } fr
 import { CribModel, GameEventModel, LeaderboardModel, TableModel } from '../../db/models/hq/GameOperations';
 import { GameIntelligenceSignalModel, GrowthPlayModel } from '../../db/models/hq/GrowthIntelligence';
 import { HQEventModel, WalletLedgerModel } from '../../db/models/hq/Operations';
+import { hqRoles, userTags } from '../../hq/domain';
 
 const toId = (value: unknown) => String(value ?? '');
+const roleSet = new Set<string>(hqRoles);
+const tagSet = new Set<string>(userTags);
+
+type ActorContext = {
+  actorId?: string;
+  actorRole?: string;
+  actorName?: string;
+};
+
+const normalizeActorRole = (role?: string) => (role && roleSet.has(role) ? role : 'operator');
+
+const recordAdminAction = async (input: ActorContext & {
+  actionType: string;
+  targetType: string;
+  targetId: string;
+  description: string;
+  metadata?: Record<string, unknown>;
+}) => {
+  await AdminActionLogModel.create({
+    actorId: input.actorId,
+    actorRole: normalizeActorRole(input.actorRole),
+    action: input.actionType,
+    actionType: input.actionType,
+    targetType: input.targetType,
+    targetId: input.targetId,
+    summary: input.description,
+    description: input.description,
+    metadata: {
+      ...(input.metadata ?? {}),
+      actorName: input.actorName
+    }
+  });
+};
 
 const mapUser = (user: any, profile?: any) => ({
   id: toId(user._id),
@@ -96,15 +130,25 @@ const mapEvent = (event: any) => ({
 const mapSignal = (signal: any) => ({
   id: toId(signal._id),
   signalType: signal.signalType,
+  sourceType: signal.sourceType ?? signal.source,
   source: signal.source,
   sourceId: signal.sourceId,
-  targetUserId: signal.targetUserId ? toId(signal.targetUserId) : null,
-  targetCribId: signal.targetCribId ? toId(signal.targetCribId) : null,
-  targetTableId: signal.targetTableId ? toId(signal.targetTableId) : null,
-  targetEventId: signal.targetEventId ? toId(signal.targetEventId) : null,
+  playerId: signal.playerId ? toId(signal.playerId) : signal.targetUserId ? toId(signal.targetUserId) : null,
+  tableId: signal.tableId ? toId(signal.tableId) : signal.targetTableId ? toId(signal.targetTableId) : null,
+  cribId: signal.cribId ? toId(signal.cribId) : signal.targetCribId ? toId(signal.targetCribId) : null,
+  eventId: signal.eventId ? toId(signal.eventId) : signal.targetEventId ? toId(signal.targetEventId) : null,
+  targetUserId: signal.targetUserId ? toId(signal.targetUserId) : signal.playerId ? toId(signal.playerId) : null,
+  targetCribId: signal.targetCribId ? toId(signal.targetCribId) : signal.cribId ? toId(signal.cribId) : null,
+  targetTableId: signal.targetTableId ? toId(signal.targetTableId) : signal.tableId ? toId(signal.tableId) : null,
+  targetEventId: signal.targetEventId ? toId(signal.targetEventId) : signal.eventId ? toId(signal.eventId) : null,
+  title: signal.title ?? signal.summary,
+  description: signal.description ?? signal.summary,
   summary: signal.summary,
-  details: signal.details ?? {},
+  details: signal.details ?? signal.metadata ?? {},
+  metadata: signal.metadata ?? signal.details ?? {},
+  severity: signal.severity ?? 'medium',
   confidence: signal.confidence,
+  visibilitySafe: signal.visibilitySafe ?? true,
   occurredAt: signal.occurredAt,
   status: signal.status,
   createdAt: signal.createdAt,
@@ -180,7 +224,7 @@ export const getCoreModuleReadiness = async () => {
       { id: 'cribs', status: 'connected', detail: 'Cribs are stored in Mongo and can be listed or updated.', counts: { cribs } },
       { id: 'events', status: 'connected', detail: 'HQ events are stored in Mongo and can be created, listed, and updated.', counts: { hqEvents } },
       { id: 'game_intelligence', status: 'connected', detail: 'HQ signals and normalized RGE signals are exposed through API routes.', counts: { hqSignals, gameEvents, leaderboards } },
-      { id: 'rge_growth_engine', status: 'connected', detail: 'Growth Plays are generated from intelligence and can become operator content items.', counts: { growthPlays } },
+      { id: 'growth_plays', status: 'connected', detail: 'Growth Plays are generated from intelligence and can become operator content items.', counts: { growthPlays } },
       { id: 'content_studio', status: 'connected', detail: 'Content items support copy generation, media rendering, approval, scheduling, publishing, and archiving.' },
       { id: 'referrals', status: 'connected', detail: 'Referral create, invite, reward, and reporting flows are wired.' },
       { id: 'wallet_ops', status: 'connected', detail: 'Wallet summaries and HQ wallet ledger records are queryable.', counts: { walletLedger } },
@@ -228,8 +272,11 @@ export const getHqUserProfile = async (userId: string) => {
     })),
     actions: actions.map((action) => ({
       id: toId(action._id),
-      action: action.action,
-      summary: action.summary,
+      action: action.actionType ?? action.action,
+      actionType: action.actionType ?? action.action,
+      summary: action.description ?? action.summary,
+      description: action.description ?? action.summary,
+      actorRole: action.actorRole ?? 'operator',
       metadata: action.metadata ?? {},
       createdAt: action.createdAt
     })),
@@ -246,22 +293,130 @@ export const getHqUserProfile = async (userId: string) => {
   };
 };
 
-export const updateHqUser = async (userId: string, input: { status?: string; role?: string }) => {
+export const createHqUser = async (
+  input: {
+    username: string;
+    displayName: string;
+    email?: string;
+    phone?: string;
+    status?: string;
+    role?: string;
+    tags?: string[];
+    adminNote?: string;
+  },
+  actor?: ActorContext
+) => {
+  const user = await HQUserModel.create({
+    username: input.username,
+    displayName: input.displayName,
+    email: input.email,
+    status: input.status ?? 'active',
+    role: input.role ?? 'player'
+  });
+  const tags = (input.tags ?? []).filter((tag) => tagSet.has(tag));
+  const profile = await UserProfileModel.create({
+    userId: user._id,
+    displayName: input.displayName,
+    contact: {
+      email: input.email,
+      phone: input.phone
+    },
+    tags
+  });
+
+  if (input.adminNote) {
+    await AdminNoteModel.create({ userId: user._id, note: input.adminNote, visibility: 'internal' });
+  }
+
+  await recordAdminAction({
+    ...actor,
+    actionType: 'user_created',
+    targetType: 'user',
+    targetId: toId(user._id),
+    description: `Created HQ user ${input.displayName}.`,
+    metadata: { username: input.username, role: input.role ?? 'player', tags }
+  });
+
+  return mapUser(user.toObject(), profile.toObject());
+};
+
+export const updateHqUser = async (userId: string, input: { status?: string; role?: string; displayName?: string; email?: string }, actor?: ActorContext) => {
   const user = await HQUserModel.findByIdAndUpdate(userId, { $set: input }, { new: true, runValidators: true }).lean();
   if (!user) {
     throw new AppError('User not found', 404);
   }
+  if (input.displayName || input.email) {
+    await UserProfileModel.findOneAndUpdate(
+      { userId },
+      {
+        $set: {
+          ...(input.displayName ? { displayName: input.displayName } : {}),
+          ...(input.email ? { 'contact.email': input.email } : {})
+        }
+      },
+      { new: true }
+    );
+  }
+  await recordAdminAction({
+    ...actor,
+    actionType: input.status === 'suspended' ? 'user_suspended' : 'user_updated',
+    targetType: 'user',
+    targetId: userId,
+    description: `Updated HQ user ${user.displayName}.`,
+    metadata: { changes: input }
+  });
   const profile = await UserProfileModel.findOne({ userId }).lean();
   return mapUser(user, profile);
 };
 
-export const createHqAdminNote = async (input: { userId: string; note: string; visibility?: string }) => {
+export const updateHqUserTags = async (userId: string, input: { add?: string[]; remove?: string[]; set?: string[] }, actor?: ActorContext) => {
+  const user = await HQUserModel.findById(userId).lean();
+  if (!user) {
+    throw new AppError('User not found', 404);
+  }
+
+  const profile = await UserProfileModel.findOne({ userId });
+  if (!profile) {
+    throw new AppError('User profile not found', 404);
+  }
+
+  const current = new Set<string>((profile.tags ?? []) as string[]);
+  if (input.set) {
+    current.clear();
+    input.set.filter((tag) => tagSet.has(tag)).forEach((tag) => current.add(tag));
+  }
+  (input.add ?? []).filter((tag) => tagSet.has(tag)).forEach((tag) => current.add(tag));
+  (input.remove ?? []).forEach((tag) => current.delete(tag));
+
+  profile.tags = Array.from(current) as any;
+  await profile.save();
+  await recordAdminAction({
+    ...actor,
+    actionType: 'user_updated',
+    targetType: 'user',
+    targetId: userId,
+    description: `Updated tags for ${user.displayName}.`,
+    metadata: { tags: profile.tags, add: input.add, remove: input.remove, set: input.set }
+  });
+
+  return mapUser(user, profile.toObject());
+};
+
+export const createHqAdminNote = async (input: { userId: string; note: string; visibility?: string }, actor?: ActorContext) => {
   const user = await HQUserModel.findById(input.userId).lean();
   if (!user) {
     throw new AppError('User not found', 404);
   }
 
   const note = await AdminNoteModel.create(input);
+  await recordAdminAction({
+    ...actor,
+    actionType: 'note_added',
+    targetType: 'user',
+    targetId: input.userId,
+    description: `Added admin note for ${user.displayName}.`,
+    metadata: { visibility: input.visibility ?? 'internal' }
+  });
   return {
     id: toId(note._id),
     userId: toId(note.userId),
@@ -272,6 +427,19 @@ export const createHqAdminNote = async (input: { userId: string; note: string; v
   };
 };
 
+export const createHqCrib = async (input: Record<string, unknown>, actor?: ActorContext) => {
+  const crib = await CribModel.create(input);
+  await recordAdminAction({
+    ...actor,
+    actionType: 'crib_created',
+    targetType: 'crib',
+    targetId: toId(crib._id),
+    description: `Created crib ${crib.cribName}.`,
+    metadata: input
+  });
+  return mapCrib(crib.toObject(), 0);
+};
+
 export const listHqCribs = async (input?: { status?: string }) => {
   const query = input?.status ? { status: input.status } : {};
   const cribs = await CribModel.find(query).sort({ growthPriority: -1, updatedAt: -1 }).lean();
@@ -280,13 +448,35 @@ export const listHqCribs = async (input?: { status?: string }) => {
   return cribs.map((crib) => mapCrib(crib, countByCrib.get(toId(crib._id)) ?? 0));
 };
 
-export const updateHqCrib = async (cribId: string, input: Record<string, unknown>) => {
+export const updateHqCrib = async (cribId: string, input: Record<string, unknown>, actor?: ActorContext) => {
   const crib = await CribModel.findByIdAndUpdate(cribId, { $set: input }, { new: true, runValidators: true }).lean();
   if (!crib) {
     throw new AppError('Crib not found', 404);
   }
+  await recordAdminAction({
+    ...actor,
+    actionType: 'crib_updated',
+    targetType: 'crib',
+    targetId: cribId,
+    description: `Updated crib ${crib.cribName}.`,
+    metadata: { changes: input }
+  });
   const tableCount = await TableModel.countDocuments({ cribId });
   return mapCrib(crib, tableCount);
+};
+
+export const createHqTable = async (input: Record<string, unknown>, actor?: ActorContext) => {
+  const table = await TableModel.create(input);
+  await recordAdminAction({
+    ...actor,
+    actionType: 'table_created',
+    targetType: 'table',
+    targetId: toId(table._id),
+    description: `Created table ${table.tableName}.`,
+    metadata: input
+  });
+  const populated = await TableModel.findById(table._id).populate('cribId', 'cribName').lean();
+  return mapTable(populated ?? table.toObject());
 };
 
 export const listHqTables = async (input?: { status?: string; cribId?: string }) => {
@@ -297,13 +487,21 @@ export const listHqTables = async (input?: { status?: string; cribId?: string })
   return tables.map(mapTable);
 };
 
-export const updateHqTable = async (tableId: string, input: Record<string, unknown>) => {
+export const updateHqTable = async (tableId: string, input: Record<string, unknown>, actor?: ActorContext) => {
   const table = await TableModel.findByIdAndUpdate(tableId, { $set: input }, { new: true, runValidators: true })
     .populate('cribId', 'cribName')
     .lean();
   if (!table) {
     throw new AppError('Table not found', 404);
   }
+  await recordAdminAction({
+    ...actor,
+    actionType: input.status === 'paused' ? 'table_paused' : 'table_updated',
+    targetType: 'table',
+    targetId: tableId,
+    description: `Updated table ${table.tableName}.`,
+    metadata: { changes: input }
+  });
   return mapTable(table);
 };
 
@@ -313,16 +511,33 @@ export const listHqEvents = async (input?: { status?: string }) => {
   return events.map(mapEvent);
 };
 
-export const createHqEvent = async (input: Record<string, unknown>) => {
+export const createHqEvent = async (input: Record<string, unknown>, actor?: ActorContext) => {
   const event = await HQEventModel.create(input);
+  await recordAdminAction({
+    ...actor,
+    actionType: 'event_created',
+    targetType: 'event',
+    targetId: toId(event._id),
+    description: `Created event ${event.eventName}.`,
+    metadata: input
+  });
   return mapEvent(event.toObject());
 };
 
-export const updateHqEvent = async (eventId: string, input: Record<string, unknown>) => {
+export const updateHqEvent = async (eventId: string, input: Record<string, unknown>, actor?: ActorContext) => {
   const event = await HQEventModel.findByIdAndUpdate(eventId, { $set: input }, { new: true, runValidators: true }).lean();
   if (!event) {
     throw new AppError('Event not found', 404);
   }
+  const actionType = input.status === 'running' ? 'event_started' : input.status === 'completed' ? 'event_ended' : 'event_created';
+  await recordAdminAction({
+    ...actor,
+    actionType,
+    targetType: 'event',
+    targetId: eventId,
+    description: `Updated event ${event.eventName}.`,
+    metadata: { changes: input }
+  });
   return mapEvent(event);
 };
 
@@ -332,16 +547,61 @@ export const listHqGameIntelligenceSignals = async (input?: { status?: string; l
   return signals.map(mapSignal);
 };
 
+export const createHqGameIntelligenceSignal = async (input: Record<string, any>, actor?: ActorContext) => {
+  const sourceType = input.sourceType ?? input.source;
+  const signal = await GameIntelligenceSignalModel.create({
+    signalType: input.signalType,
+    source: sourceType,
+    sourceType,
+    sourceId: input.sourceId,
+    targetUserId: input.playerId ?? input.targetUserId,
+    playerId: input.playerId ?? input.targetUserId,
+    targetTableId: input.tableId ?? input.targetTableId,
+    tableId: input.tableId ?? input.targetTableId,
+    targetCribId: input.cribId ?? input.targetCribId,
+    cribId: input.cribId ?? input.targetCribId,
+    targetEventId: input.eventId ?? input.targetEventId,
+    eventId: input.eventId ?? input.targetEventId,
+    title: input.title,
+    description: input.description,
+    summary: input.title ?? input.description,
+    details: input.metadata ?? input.details ?? {},
+    metadata: input.metadata ?? input.details ?? {},
+    severity: input.severity ?? 'medium',
+    confidence: input.confidence ?? 50,
+    visibilitySafe: input.visibilitySafe ?? true,
+    occurredAt: input.occurredAt ?? new Date(),
+    status: input.status ?? 'new'
+  });
+  await recordAdminAction({
+    ...actor,
+    actionType: 'growth_play_created',
+    targetType: 'game_intelligence_signal',
+    targetId: toId(signal._id),
+    description: `Created Game Intelligence signal ${signal.signalType}.`,
+    metadata: { signalType: signal.signalType, sourceType }
+  });
+  return mapSignal(signal.toObject());
+};
+
 export const listHqGrowthPlays = async (input?: { status?: string; limit?: number }) => {
   const query = input?.status ? { status: input.status } : {};
   const plays = await GrowthPlayModel.find(query).sort({ finalScore: -1, createdAt: -1 }).limit(input?.limit ?? 50).lean();
   return plays.map(mapGrowthPlay);
 };
 
-export const updateHqGrowthPlayStatus = async (playId: string, status: string) => {
+export const updateHqGrowthPlayStatus = async (playId: string, status: string, actor?: ActorContext) => {
   const play = await GrowthPlayModel.findByIdAndUpdate(playId, { $set: { status } }, { new: true, runValidators: true }).lean();
   if (!play) {
     throw new AppError('Growth Play not found', 404);
   }
+  await recordAdminAction({
+    ...actor,
+    actionType: status === 'approved' ? 'growth_play_approved' : status === 'dismissed' ? 'growth_play_dismissed' : 'growth_play_created',
+    targetType: 'growth_play',
+    targetId: playId,
+    description: `Changed Growth Play "${play.title}" to ${status}.`,
+    metadata: { status }
+  });
   return mapGrowthPlay(play);
 };

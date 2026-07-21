@@ -10,6 +10,7 @@ import { enqueueContentGeneration, enqueueIntelligenceSync, enqueueMediaCreation
 import {
   attachOperatorSession,
   authenticateOperator,
+  OperatorProfile,
   clearOperatorSession
 } from '../services/auth/operatorAuthService';
 import { getAnalyticsDashboard, recordAnalyticsDelta } from '../services/analytics/analyticsService';
@@ -38,7 +39,11 @@ import {
 import { createEventAndDraftPost } from '../services/data-layer/eventService';
 import {
   createHqAdminNote,
+  createHqCrib,
   createHqEvent,
+  createHqGameIntelligenceSignal,
+  createHqTable,
+  createHqUser,
   getCoreModuleReadiness,
   getHqUserProfile,
   listHqCribs,
@@ -51,7 +56,8 @@ import {
   updateHqEvent,
   updateHqGrowthPlayStatus,
   updateHqTable,
-  updateHqUser
+  updateHqUser,
+  updateHqUserTags
 } from '../services/hq/coreModuleService';
 import {
   getIntelligenceOverview,
@@ -134,6 +140,13 @@ const upload = multer({
   }
 });
 const optionalPlatformsSchema = z.array(z.enum(supportedPublishPlatforms)).optional();
+const getActorContext = (operator?: OperatorProfile) => ({
+  actorRole: 'operator',
+  actorName: operator?.name,
+  metadata: {
+    actorEmail: operator?.email
+  }
+});
 
 const generateContentSchema = z.object({
   event: z.object({
@@ -283,9 +296,74 @@ const listHqUsersQuerySchema = z.object({
   search: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(100).optional()
 });
+const createHqUserSchema = z.object({
+  username: z.string().min(1),
+  displayName: z.string().min(1),
+  email: z.string().email().optional(),
+  phone: z.string().optional(),
+  status: z.enum(['active', 'disabled', 'suspended']).optional(),
+  role: z.enum(['owner', 'admin', 'operator', 'moderator', 'support', 'player']).optional(),
+  tags: z
+    .array(
+      z.enum([
+        'new_player',
+        'hot_player',
+        'vip',
+        'high_stakes',
+        'inactive',
+        'strong_referrer',
+        'event_player',
+        'content_safe',
+        'do_not_feature',
+        'suspicious',
+        'needs_support'
+      ])
+    )
+    .optional(),
+  adminNote: z.string().optional()
+});
 const updateHqUserSchema = z.object({
   status: z.enum(['active', 'disabled', 'suspended']).optional(),
-  role: z.enum(['owner', 'admin', 'operator', 'moderator', 'support', 'player']).optional()
+  role: z.enum(['owner', 'admin', 'operator', 'moderator', 'support', 'player']).optional(),
+  displayName: z.string().min(1).optional(),
+  email: z.string().email().optional()
+});
+const updateHqUserTagsSchema = z.object({
+  add: z
+    .array(
+      z.enum([
+        'new_player',
+        'hot_player',
+        'vip',
+        'high_stakes',
+        'inactive',
+        'strong_referrer',
+        'event_player',
+        'content_safe',
+        'do_not_feature',
+        'suspicious',
+        'needs_support'
+      ])
+    )
+    .optional(),
+  remove: z.array(z.string()).optional(),
+  set: z
+    .array(
+      z.enum([
+        'new_player',
+        'hot_player',
+        'vip',
+        'high_stakes',
+        'inactive',
+        'strong_referrer',
+        'event_player',
+        'content_safe',
+        'do_not_feature',
+        'suspicious',
+        'needs_support'
+      ])
+    )
+    .optional()
 });
 const createAdminNoteSchema = z.object({
   note: z.string().min(1),
@@ -308,8 +386,13 @@ const updateHqCribSchema = z.object({
   eventEligible: z.boolean().optional(),
   visualStyle: z.record(z.string(), z.unknown()).optional()
 });
+const createHqCribSchema = updateHqCribSchema.extend({
+  cribName: z.string().min(1),
+  stakeTier: z.string().min(1)
+});
 const updateHqTableSchema = z.object({
   tableName: z.string().min(1).optional(),
+  cribId: z.string().min(1).optional(),
   stake: z.number().optional(),
   maxSeats: z.number().int().min(2).max(8).optional(),
   status: z.enum(['open', 'active', 'paused', 'closed']).optional(),
@@ -321,6 +404,11 @@ const updateHqTableSchema = z.object({
   theme: z.string().optional(),
   priority: z.number().optional(),
   featuredAt: z.string().datetime().nullable().optional()
+});
+const createHqTableSchema = updateHqTableSchema.extend({
+  tableName: z.string().min(1),
+  cribId: z.string().min(1),
+  stake: z.number()
 });
 const hqEventPayloadSchema = z.object({
   eventName: z.string().min(1),
@@ -340,6 +428,44 @@ const updateHqEventSchema = hqEventPayloadSchema.partial();
 const listHqSignalsQuerySchema = z.object({
   status: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(100).optional()
+});
+const createHqSignalSchema = z.object({
+  signalType: z.enum([
+    'reem_detected',
+    'caught_drop_detected',
+    'big_payout_detected',
+    'high_stakes_win_detected',
+    'first_turn_41_detected',
+    'first_turn_lowball_detected',
+    'auto_50_47_detected',
+    'hot_player_detected',
+    'leaderboard_jump_detected',
+    'new_player_first_win_detected',
+    'returning_player_active_detected',
+    'hot_table_detected',
+    'dead_table_detected',
+    'crib_heating_up_detected',
+    'event_needs_promotion_detected',
+    'referral_momentum_detected',
+    'inactive_player_segment_detected',
+    'content_format_working_detected',
+    'content_fatigue_detected',
+    'suspicious_activity_detected'
+  ]),
+  sourceType: z.string().min(1),
+  sourceId: z.string().min(1),
+  playerId: z.string().optional(),
+  tableId: z.string().optional(),
+  cribId: z.string().optional(),
+  eventId: z.string().optional(),
+  title: z.string().min(1),
+  description: z.string().min(1),
+  occurredAt: z.string().datetime().optional(),
+  severity: z.enum(['info', 'low', 'medium', 'high', 'critical']).optional(),
+  confidence: z.number().min(0).max(100).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+  visibilitySafe: z.boolean().optional(),
+  status: z.enum(['new', 'ranked', 'converted', 'dismissed']).optional()
 });
 const listHqGrowthPlaysQuerySchema = z.object({
   status: z.string().optional(),
@@ -450,6 +576,22 @@ router.get(
   })
 );
 
+router.post(
+  '/hq/users',
+  asyncHandler(async (req, res) => {
+    const body = createHqUserSchema.parse(req.body ?? {});
+    res.status(201).json(await createHqUser(body, getActorContext(req.operator)));
+  })
+);
+
+router.get(
+  '/hq/users/:userId',
+  asyncHandler(async (req, res) => {
+    const userId = z.string().parse(req.params.userId);
+    res.json(await getHqUserProfile(userId));
+  })
+);
+
 router.get(
   '/hq/users/:userId/profile',
   asyncHandler(async (req, res) => {
@@ -463,7 +605,16 @@ router.patch(
   asyncHandler(async (req, res) => {
     const userId = z.string().parse(req.params.userId);
     const body = updateHqUserSchema.parse(req.body ?? {});
-    res.json(await updateHqUser(userId, body));
+    res.json(await updateHqUser(userId, body, getActorContext(req.operator)));
+  })
+);
+
+router.patch(
+  '/hq/users/:userId/tags',
+  asyncHandler(async (req, res) => {
+    const userId = z.string().parse(req.params.userId);
+    const body = updateHqUserTagsSchema.parse(req.body ?? {});
+    res.json(await updateHqUserTags(userId, body, getActorContext(req.operator)));
   })
 );
 
@@ -472,7 +623,7 @@ router.post(
   asyncHandler(async (req, res) => {
     const userId = z.string().parse(req.params.userId);
     const body = createAdminNoteSchema.parse(req.body ?? {});
-    res.status(201).json(await createHqAdminNote({ userId, ...body }));
+    res.status(201).json(await createHqAdminNote({ userId, ...body }, getActorContext(req.operator)));
   })
 );
 
@@ -484,12 +635,20 @@ router.get(
   })
 );
 
+router.post(
+  '/hq/cribs',
+  asyncHandler(async (req, res) => {
+    const body = createHqCribSchema.parse(req.body ?? {});
+    res.status(201).json(await createHqCrib(body, getActorContext(req.operator)));
+  })
+);
+
 router.patch(
   '/hq/cribs/:cribId',
   asyncHandler(async (req, res) => {
     const cribId = z.string().parse(req.params.cribId);
     const body = updateHqCribSchema.parse(req.body ?? {});
-    res.json(await updateHqCrib(cribId, body));
+    res.json(await updateHqCrib(cribId, body, getActorContext(req.operator)));
   })
 );
 
@@ -501,12 +660,20 @@ router.get(
   })
 );
 
+router.post(
+  '/hq/tables',
+  asyncHandler(async (req, res) => {
+    const body = createHqTableSchema.parse(req.body ?? {});
+    res.status(201).json(await createHqTable(body, getActorContext(req.operator)));
+  })
+);
+
 router.patch(
   '/hq/tables/:tableId',
   asyncHandler(async (req, res) => {
     const tableId = z.string().parse(req.params.tableId);
     const body = updateHqTableSchema.parse(req.body ?? {});
-    res.json(await updateHqTable(tableId, body));
+    res.json(await updateHqTable(tableId, body, getActorContext(req.operator)));
   })
 );
 
@@ -522,7 +689,7 @@ router.post(
   '/hq/events',
   asyncHandler(async (req, res) => {
     const body = hqEventPayloadSchema.parse(req.body ?? {});
-    res.status(201).json(await createHqEvent(body));
+    res.status(201).json(await createHqEvent(body, getActorContext(req.operator)));
   })
 );
 
@@ -531,7 +698,7 @@ router.patch(
   asyncHandler(async (req, res) => {
     const eventId = z.string().parse(req.params.eventId);
     const body = updateHqEventSchema.parse(req.body ?? {});
-    res.json(await updateHqEvent(eventId, body));
+    res.json(await updateHqEvent(eventId, body, getActorContext(req.operator)));
   })
 );
 
@@ -540,6 +707,47 @@ router.get(
   asyncHandler(async (req, res) => {
     const query = listHqSignalsQuerySchema.parse(req.query);
     res.json(await listHqGameIntelligenceSignals(query));
+  })
+);
+
+router.post(
+  '/hq/game-intelligence/signals',
+  asyncHandler(async (req, res) => {
+    const body = createHqSignalSchema.parse(req.body ?? {});
+    res.status(201).json(await createHqGameIntelligenceSignal(body, getActorContext(req.operator)));
+  })
+);
+
+router.get(
+  '/hq/growth-plays',
+  asyncHandler(async (req, res) => {
+    const query = listHqGrowthPlaysQuerySchema.parse(req.query);
+    res.json(await listHqGrowthPlays(query));
+  })
+);
+
+router.patch(
+  '/hq/growth-plays/:growthPlayId',
+  asyncHandler(async (req, res) => {
+    const growthPlayId = z.string().parse(req.params.growthPlayId);
+    const body = updateHqGrowthPlayStatusSchema.parse(req.body ?? {});
+    res.json(await updateHqGrowthPlayStatus(growthPlayId, body.status, getActorContext(req.operator)));
+  })
+);
+
+router.post(
+  '/hq/growth-plays/:growthPlayId/approve',
+  asyncHandler(async (req, res) => {
+    const growthPlayId = z.string().parse(req.params.growthPlayId);
+    res.json(await updateHqGrowthPlayStatus(growthPlayId, 'approved', getActorContext(req.operator)));
+  })
+);
+
+router.post(
+  '/hq/growth-plays/:growthPlayId/dismiss',
+  asyncHandler(async (req, res) => {
+    const growthPlayId = z.string().parse(req.params.growthPlayId);
+    res.json(await updateHqGrowthPlayStatus(growthPlayId, 'dismissed', getActorContext(req.operator)));
   })
 );
 
@@ -556,7 +764,7 @@ router.patch(
   asyncHandler(async (req, res) => {
     const growthPlayId = z.string().parse(req.params.growthPlayId);
     const body = updateHqGrowthPlayStatusSchema.parse(req.body ?? {});
-    res.json(await updateHqGrowthPlayStatus(growthPlayId, body.status));
+    res.json(await updateHqGrowthPlayStatus(growthPlayId, body.status, getActorContext(req.operator)));
   })
 );
 

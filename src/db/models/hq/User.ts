@@ -51,10 +51,13 @@ const AdminNoteSchema = new Schema(
 const AdminActionLogSchema = new Schema(
   {
     actorId: { type: Schema.Types.ObjectId, ref: 'HQUser', index: true },
+    actorRole: { type: String, enum: hqRoles, default: 'operator', index: true },
     action: { type: String, required: true, index: true },
+    actionType: { type: String, index: true },
     targetType: { type: String, required: true, index: true },
     targetId: { type: String, required: true, index: true },
     summary: { type: String, required: true },
+    description: { type: String },
     metadata: { type: Schema.Types.Mixed, default: {} }
   },
   {

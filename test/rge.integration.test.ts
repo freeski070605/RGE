@@ -29,6 +29,7 @@ type ModuleBag = {
   HQUserModel: any;
   UserProfileModel: any;
   AdminNoteModel: any;
+  AdminActionLogModel: any;
   CribModel: any;
   TableModel: any;
   HQEventModel: any;
@@ -209,7 +210,7 @@ before(async () => {
   const { OperatorSettingModel } = await import('../src/db/models/OperatorSetting');
   const { AssetModel } = await import('../src/db/models/Asset');
   const { WorkerHeartbeatModel } = await import('../src/db/models/WorkerHeartbeat');
-  const { HQUserModel, UserProfileModel, AdminNoteModel } = await import('../src/db/models/hq/User');
+  const { HQUserModel, UserProfileModel, AdminNoteModel, AdminActionLogModel } = await import('../src/db/models/hq/User');
   const { CribModel, TableModel } = await import('../src/db/models/hq/GameOperations');
   const { GameIntelligenceSignalModel, GrowthPlayModel } = await import('../src/db/models/hq/GrowthIntelligence');
   const { HQEventModel } = await import('../src/db/models/hq/Operations');
@@ -235,6 +236,7 @@ before(async () => {
     HQUserModel,
     UserProfileModel,
     AdminNoteModel,
+    AdminActionLogModel,
     CribModel,
     TableModel,
     HQEventModel,
@@ -402,12 +404,34 @@ test('HQ core module APIs are database-backed and support operator actions', asy
   assert.equal((users.payload as any[]).length, 1);
   assert.equal((users.payload as any[])[0].profile.reems, 9);
 
+  const createdUser = await apiJson('/api/hq/users', {
+    method: 'POST',
+    body: {
+      username: 'newreem',
+      displayName: 'New Reem',
+      email: 'new@example.com',
+      role: 'player',
+      tags: ['new_player', 'needs_support'],
+      adminNote: 'Created from HQ integration test.'
+    }
+  });
+  assert.equal(createdUser.status, 201);
+  assert.equal((createdUser.payload as any).profile.tags.includes('new_player'), true);
+
   const suspended = await apiJson(`/api/hq/users/${userId}`, {
     method: 'PATCH',
     body: { status: 'suspended' }
   });
   assert.equal(suspended.status, 200);
   assert.equal((suspended.payload as any).status, 'suspended');
+
+  const tagged = await apiJson(`/api/hq/users/${userId}/tags`, {
+    method: 'PATCH',
+    body: { add: ['needs_support'], remove: ['hot_player'] }
+  });
+  assert.equal(tagged.status, 200);
+  assert.equal((tagged.payload as any).profile.tags.includes('needs_support'), true);
+  assert.equal((tagged.payload as any).profile.tags.includes('hot_player'), false);
 
   const note = await apiJson(`/api/hq/users/${userId}/notes`, {
     method: 'POST',
@@ -424,6 +448,19 @@ test('HQ core module APIs are database-backed and support operator actions', asy
   assert.equal(cribs.status, 200);
   assert.equal((cribs.payload as any[])[0].tableCount, 1);
 
+  const createdCrib = await apiJson('/api/hq/cribs', {
+    method: 'POST',
+    body: {
+      cribName: 'Kitchen Table',
+      description: 'Low-stake warmup crib.',
+      stakeTier: 'low',
+      theme: 'kitchen',
+      status: 'active'
+    }
+  });
+  assert.equal(createdCrib.status, 201);
+  assert.equal((createdCrib.payload as any).cribName, 'Kitchen Table');
+
   const updatedCrib = await apiJson(`/api/hq/cribs/${cribId}`, {
     method: 'PATCH',
     body: { growthPriority: 99, featured: false }
@@ -434,6 +471,19 @@ test('HQ core module APIs are database-backed and support operator actions', asy
   const tables = await apiJson(`/api/hq/tables?cribId=${cribId}`);
   assert.equal(tables.status, 200);
   assert.equal((tables.payload as any[])[0].cribName, 'Da Crown Room');
+
+  const createdTable = await apiJson('/api/hq/tables', {
+    method: 'POST',
+    body: {
+      tableName: 'Kitchen 1',
+      cribId: (createdCrib.payload as any).id,
+      stake: 5,
+      maxSeats: 4,
+      visibility: 'public'
+    }
+  });
+  assert.equal(createdTable.status, 201);
+  assert.equal((createdTable.payload as any).tableName, 'Kitchen 1');
 
   const updatedTable = await apiJson(`/api/hq/tables/${tableId}`, {
     method: 'PATCH',
@@ -467,18 +517,50 @@ test('HQ core module APIs are database-backed and support operator actions', asy
   assert.equal(signals.status, 200);
   assert.equal((signals.payload as any[])[0].summary, 'Crown Maya hit a Reem in Da Crown Room.');
 
-  const growthPlays = await apiJson('/api/hq/rge/growth-plays?status=open');
+  const createdSignal = await apiJson('/api/hq/game-intelligence/signals', {
+    method: 'POST',
+    body: {
+      signalType: 'suspicious_activity_detected',
+      sourceType: 'support',
+      sourceId: 'support-flag-1',
+      playerId: String(userId),
+      title: 'Repeated chargeback language detected',
+      description: 'Support notes mention the same wallet dispute pattern three times.',
+      severity: 'high',
+      confidence: 88,
+      visibilitySafe: false,
+      occurredAt: new Date().toISOString(),
+      metadata: { source: 'support' }
+    }
+  });
+  assert.equal(createdSignal.status, 201);
+  assert.equal((createdSignal.payload as any).sourceType, 'support');
+  assert.equal((createdSignal.payload as any).visibilitySafe, false);
+
+  const growthPlays = await apiJson('/api/hq/growth-plays?status=open');
   assert.equal(growthPlays.status, 200);
   assert.equal((growthPlays.payload as any[])[0].title, 'Feature Crown Maya after the Friday Night Reem');
   assert.equal((growthPlays.payload as any[])[0].playType, 'gameplay_highlight');
   assert.equal((growthPlays.payload as any[])[0].whyThis.campaignFit, 'Matches promote_friday_night_reem.');
 
-  const actionedGrowthPlay = await apiJson(`/api/hq/rge/growth-plays/${growthPlay._id}/status`, {
+  const actionedGrowthPlay = await apiJson(`/api/hq/growth-plays/${growthPlay._id}`, {
     method: 'PATCH',
     body: { status: 'actioned' }
   });
   assert.equal(actionedGrowthPlay.status, 200);
   assert.equal((actionedGrowthPlay.payload as any).status, 'actioned');
+
+  const dismissedGrowthPlay = await apiJson(`/api/hq/growth-plays/${growthPlay._id}/dismiss`, {
+    method: 'POST'
+  });
+  assert.equal(dismissedGrowthPlay.status, 200);
+  assert.equal((dismissedGrowthPlay.payload as any).status, 'dismissed');
+
+  const actions = await modules.AdminActionLogModel.find({}).lean();
+  assert.equal(actions.some((action: any) => action.actionType === 'user_created'), true);
+  assert.equal(actions.some((action: any) => action.actionType === 'note_added'), true);
+  assert.equal(actions.some((action: any) => action.actionType === 'table_created'), true);
+  assert.equal(actions.some((action: any) => action.targetType === 'growth_play'), true);
 });
 
 test('sync creates operator-facing opportunities and the content item lifecycle reaches the calendar', async () => {

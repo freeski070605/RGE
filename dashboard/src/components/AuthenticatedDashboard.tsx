@@ -57,7 +57,7 @@ type HqModuleId =
   | 'cribs'
   | 'events'
   | 'game_intelligence'
-  | 'rge_growth_engine'
+  | 'growth_plays'
   | 'content_studio'
   | 'referrals'
   | 'wallet_ops'
@@ -230,7 +230,7 @@ const hqModules: Array<{
   { id: 'cribs', label: 'Cribs' },
   { id: 'events', label: 'Events' },
   { id: 'game_intelligence', label: 'Game Intelligence' },
-  { id: 'rge_growth_engine', label: 'RGE Growth Engine', workspace: 'create' },
+  { id: 'growth_plays', label: 'Growth Plays', workspace: 'create' },
   { id: 'content_studio', label: 'Content Studio', workspace: 'review' },
   { id: 'referrals', label: 'Referrals', workspace: 'system' },
   { id: 'wallet_ops', label: 'Wallet/Ops' },
@@ -475,7 +475,7 @@ export function AuthenticatedDashboard(input: {
     if (moduleId === 'cribs') return hqCribs.length
     if (moduleId === 'events') return hqEvents.length
     if (moduleId === 'game_intelligence') return hqSignals.length
-    if (moduleId === 'rge_growth_engine') return hqGrowthPlays.length || opportunities.length
+    if (moduleId === 'growth_plays') return hqGrowthPlays.length || opportunities.length
     if (moduleId === 'content_studio') return pipeline?.items.length ?? 0
     if (moduleId === 'referrals') return growthLoops?.summary.referralCodes ?? 0
     if (moduleId === 'analytics') return performance?.totals.clicks ?? 0
@@ -557,7 +557,7 @@ export function AuthenticatedDashboard(input: {
 
     return {
       label: 'Sync the live feed',
-      description: 'Bring in fresh gameplay activity so the RGE Growth Engine can rank new Growth Plays.',
+      description: 'Bring in fresh gameplay activity so HQ can rank new Growth Plays.',
       buttonLabel: 'Sync now',
       tone: 'accent',
       tab: 'today',
@@ -1068,7 +1068,7 @@ export function AuthenticatedDashboard(input: {
               </div>
             ) : null}
 
-            {activeModule === 'rge_growth_engine' ? (
+            {activeModule === 'growth_plays' ? (
               <div className="queue-list queue-list--compact">
                 {hqGrowthPlays.slice(0, 5).map((play) => (
                   <div key={play.id} className="queue-item queue-item--static">
@@ -2309,7 +2309,7 @@ export function AuthenticatedDashboard(input: {
               <div className="summary-list">
                 <div className="summary-list__item">
                   <span>Growth Play</span>
-                  <strong>A gameplay, CRM, table, crib, event, or campaign signal the RGE Growth Engine recommends acting on.</strong>
+                  <strong>A gameplay, CRM, table, crib, event, or campaign signal HQ recommends acting on.</strong>
                 </div>
                 <div className="summary-list__item">
                   <span>Draft</span>

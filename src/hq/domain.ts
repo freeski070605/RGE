@@ -6,7 +6,7 @@ export const hqModules = [
   'Cribs',
   'Events',
   'Game Intelligence',
-  'RGE Growth Engine',
+  'Growth Plays',
   'Content Studio',
   'Referrals',
   'Wallet/Ops',
@@ -53,7 +53,8 @@ export const growthPlayTypes = [
   'vip_highlight',
   'support_alert',
   'admin_alert',
-  'content_recommendation'
+  'content_recommendation',
+  'risk_review'
 ] as const;
 
 export const growthPlayScoreParts = [
@@ -78,6 +79,7 @@ export const gameIntelligenceSignalTypes = [
   'high_stakes_win_detected',
   'first_turn_41_detected',
   'first_turn_lowball_detected',
+  'auto_50_47_detected',
   'hot_player_detected',
   'leaderboard_jump_detected',
   'new_player_first_win_detected',
@@ -89,7 +91,8 @@ export const gameIntelligenceSignalTypes = [
   'referral_momentum_detected',
   'inactive_player_segment_detected',
   'content_format_working_detected',
-  'content_fatigue_detected'
+  'content_fatigue_detected',
+  'suspicious_activity_detected'
 ] as const;
 
 export const campaignKeys = [
