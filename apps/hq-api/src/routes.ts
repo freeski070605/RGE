@@ -241,7 +241,8 @@ router.patch('/hq/users/:id/tags', requireRoles(['owner', 'admin', 'operator', '
 const crud = (path: string, collectionKey: keyof typeof dashboardCollections, schema: z.ZodObject<any>, actionBase: string) => {
   router.get(`/hq/${path}`, async (_request, response, next) => {
     try {
-      response.json((await dashboardCollections[collectionKey].find().sort({ updatedAt: -1 }).lean()).map(serialize));
+      const collection = dashboardCollections[collectionKey] as any;
+      response.json((await collection.find().sort({ updatedAt: -1 }).lean()).map(serialize));
     } catch (error) {
       next(error);
     }

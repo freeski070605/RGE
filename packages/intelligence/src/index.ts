@@ -64,10 +64,12 @@ export const scoreGrowthPlay = (input: GrowthPlayScoringInput) => {
   const penalties = parts.fatiguePenalty + parts.duplicationPenalty + parts.riskPenalty;
   const finalScore = clamp(positive / 9 - penalties / 3);
 
+  const urgency: 'high' | 'medium' | 'low' = finalScore >= 85 ? 'high' : finalScore >= 65 ? 'medium' : 'low';
+
   return {
     scoreParts: parts,
     finalScore,
-    urgency: finalScore >= 85 ? 'high' : finalScore >= 65 ? 'medium' : 'low'
+    urgency
   };
 };
 
