@@ -12,7 +12,7 @@
     "dev:dashboard": "npm run dev -w @reemteam/hq-dashboard",
     "build": "npm run build -w @reemteam/shared && npm run build -w @reemteam/ui && npm run build -w @reemteam/intelligence && npm run build -w @reemteam/hq-api && npm run build -w @reemteam/hq-dashboard",
     "start": "npm run start -w @reemteam/hq-api",
-    "test": "npm run test -w @reemteam/hq-api"
+    "test": "npm run test -w @reemteam/intelligence && npm run test -w @reemteam/hq-api"
   },
   "engines": {
     "node": ">=20.0.0"
