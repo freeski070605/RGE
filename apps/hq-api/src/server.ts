@@ -1,8 +1,8 @@
 import { createApp } from './app.js';
 import { env } from './config.js';
-import { connectDatabase } from './db.js';
+import { tryConnectDatabase } from './db.js';
 
-await connectDatabase();
+await tryConnectDatabase();
 createApp().listen(env.port, () => {
   console.log(`ReemTeamHQ API listening on ${env.port}`);
 });

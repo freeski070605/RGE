@@ -6,21 +6,29 @@ const intFromEnv = (key: string, fallback: number) => {
 };
 
 const resolveMongoUri = () => {
-  const uri = process.env.MONGODB_URI;
-  if (uri) return uri;
-
-  if (process.env.NODE_ENV === 'production') {
-    throw new Error('MONGODB_URI is required in production. Set it on the Render rge-api service environment.');
+  const candidates = ['MONGODB_URI', 'MONGO_URI', 'MONGO_URL', 'DATABASE_URL', 'MONGODB_URL', 'DB_URI'];
+  for (const key of candidates) {
+    const value = process.env[key]?.trim();
+    if (value) {
+      return { uri: value, source: key };
+    }
   }
 
-  return 'mongodb://127.0.0.1:27017/reemteam-hq';
+  if (process.env.NODE_ENV !== 'production') {
+    return { uri: 'mongodb://127.0.0.1:27017/reemteam-hq', source: 'development_default' };
+  }
+
+  return { uri: '', source: '' };
 };
+
+const mongo = resolveMongoUri();
 
 export const env = {
   nodeEnv: process.env.NODE_ENV ?? 'development',
   port: intFromEnv('PORT', 4000),
   appBaseUrl: process.env.APP_BASE_URL ?? 'http://localhost:4000',
-  mongoUri: resolveMongoUri(),
+  mongoUri: mongo.uri,
+  mongoUriSource: mongo.source,
   redisUrl: process.env.REDIS_URL ?? '',
   jwtSecret: process.env.JWT_SECRET ?? 'dev-secret',
   authCookieName: process.env.AUTH_COOKIE_NAME ?? 'reemteam_hq_session',

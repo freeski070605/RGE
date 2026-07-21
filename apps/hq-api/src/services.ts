@@ -15,9 +15,9 @@ import {
   User,
   WalletLedger
 } from './models.js';
+import { getDatabaseStatus, isDatabaseConnected } from './db.js';
 
 const id = (value: unknown) => String(value ?? '');
-const now = () => new Date();
 
 export const serialize = (document: any) => {
   const source = typeof document?.toObject === 'function' ? document.toObject() : document;
@@ -31,6 +31,50 @@ export const serialize = (document: any) => {
 };
 
 export const getCommandCenter = async () => {
+  if (!isDatabaseConnected()) {
+    return {
+      product: 'ReemTeamHQ',
+      sentence: 'ReemTeamHQ is the command center that turns ReemTeam activity into smarter operations, stronger player management, and real growth moves.',
+      loop: ['Game Activity', 'HQ Intelligence', 'Recommended Action', 'Operator Approval', 'Execution', 'Performance Feedback', 'Smarter Recommendations'],
+      metrics: [
+        { label: 'Active players today', value: 0, tone: 'green' },
+        { label: 'Games played today', value: 0, tone: 'gold' },
+        { label: 'Tables active now', value: 0, tone: 'blue' },
+        { label: 'Hottest crib', value: 'MongoDB offline', tone: 'orange' },
+        { label: 'Latest Reem', value: 'Waiting for MongoDB', tone: 'gold' },
+        { label: 'Biggest payout', value: 'Waiting for MongoDB', tone: 'green' },
+        { label: 'Top player', value: 'Waiting for MongoDB', tone: 'blue' },
+        { label: 'Support issues', value: 0, tone: 'orange' }
+      ],
+      recommendedActions: [],
+      urgentAlerts: [
+        {
+          id: 'mongodb-not-connected',
+          title: 'MongoDB is not connected',
+          goal: 'Bring ReemTeamHQ data online.',
+          playType: 'admin_alert',
+          recommendedAction: 'Confirm the Mongo URI env var is attached to the Render rge-api service.',
+          recommendedFormat: 'Admin alert',
+          whyItMatters: 'HQ cannot load players, cribs, tables, events, signals, or Growth Plays until MongoDB is reachable.',
+          whyThis: {
+            sourceSignals: ['Database connection check failed at startup.'],
+            scoreBoosts: ['urgency'],
+            penalties: [],
+            campaignFit: 'Infrastructure setup is required before campaigns can run.',
+            recommendedActionReason: 'MongoDB is the source of truth for ReemTeamHQ.',
+            riskVisibilityNotes: ['Operator-only infrastructure alert.']
+          },
+          urgency: 'critical',
+          confidence: 100,
+          finalScore: 100,
+          status: 'open'
+        }
+      ],
+      bestGrowthMove: null,
+      systemHealth: 'Broken'
+    };
+  }
+
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const [activePlayersToday, gamesPlayedToday, tablesActiveNow, hottestCrib, latestReem, biggestPayout, topPlayer, growthPlays, supportIssues] =
@@ -68,6 +112,28 @@ export const getCommandCenter = async () => {
 };
 
 export const getSystemHealth = async () => {
+  const databaseStatus = getDatabaseStatus();
+  if (!databaseStatus.connected) {
+    return {
+      status: 'Broken',
+      checks: [
+        { component: 'API', status: 'Healthy', detail: 'Express API is responding.' },
+        {
+          component: 'Database',
+          status: 'Broken',
+          detail: databaseStatus.configured
+            ? `MongoDB env key ${databaseStatus.configuredKey} is set but not reachable: ${databaseStatus.lastError || 'connection is not ready'}`
+            : 'No Mongo URI env key is visible. Accepted keys: MONGODB_URI, MONGO_URI, MONGO_URL, DATABASE_URL, MONGODB_URL, DB_URI.'
+        },
+        { component: 'Redis/jobs', status: 'Warning', detail: 'Redis is optional for this clean-slate runtime until workers are enabled.' },
+        { component: 'Game data ingestion', status: 'Broken', detail: 'Game intelligence is waiting for MongoDB.' },
+        { component: 'Publishing', status: 'Warning', detail: 'Publishing adapters are intentionally stubbed until credentials are connected.' }
+      ],
+      counts: { users: 0, tables: 0, cribs: 0, events: 0, signals: 0, growthPlays: 0 },
+      database: databaseStatus
+    };
+  }
+
   const [users, tables, cribs, events, signals, growthPlays] = await Promise.all([
     User.countDocuments(),
     Table.countDocuments(),
@@ -85,7 +151,8 @@ export const getSystemHealth = async () => {
       { component: 'Game data ingestion', status: signals > 0 ? 'Healthy' : 'Warning', detail: `${signals} intelligence signals stored.` },
       { component: 'Publishing', status: 'Warning', detail: 'Publishing adapters are intentionally stubbed until credentials are connected.' }
     ],
-    counts: { users, tables, cribs, events, signals, growthPlays }
+    counts: { users, tables, cribs, events, signals, growthPlays },
+    database: databaseStatus
   };
 };
 
