@@ -46,6 +46,7 @@ const UserSchema = new Schema(
     drops: { type: Number, default: 0 },
     caughtDrops: { type: Number, default: 0 },
     referrals: { type: Number, default: 0 },
+    rtcBalance: { type: Number, default: 0 },
     walletSummary: {
       credits: { type: Number, default: 0 },
       winnings: { type: Number, default: 0 },

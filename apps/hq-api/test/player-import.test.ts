@@ -39,6 +39,9 @@ test('existing players are imported from legacy collections into HQ users and pr
           reems: 3,
           referrals: 8,
           averageStake: 55
+        },
+        walletSummary: {
+          credits: 2800
         }
       },
       {
@@ -57,6 +60,7 @@ test('existing players are imported from legacy collections into HQ users and pr
     const user = await User.findOne({ username: 'legacy_ace' }).lean();
     assert.equal(user?.displayName, 'Legacy Ace');
     assert.equal(user?.role, 'player');
+    assert.equal(user?.rtcBalance, 2800);
     assert.equal(user?.tags.includes('high_stakes'), true);
     assert.equal(user?.tags.includes('strong_referrer'), true);
 
@@ -85,6 +89,7 @@ test('existing players are imported from legacy collections into HQ users and pr
       referralCount: 4,
       averageStake: 35,
       highestStake: 150,
+      walletSummary: { credits: 6400 },
       tags: ['vip']
     });
 
@@ -97,10 +102,18 @@ test('existing players are imported from legacy collections into HQ users and pr
     assert.equal(hqUser?.gamesPlayed, 99);
     assert.equal(hqUser?.wins, 61);
     assert.equal(hqUser?.highestStake, 150);
+    assert.equal(hqUser?.rtcBalance, 6400);
     assert.equal(hqUser?.tags.includes('vip'), true);
 
     const hqProfile = await UserProfile.findOne({ userId: hqUser?._id }).lean();
     assert.equal(hqProfile?.summary.gamesPlayed, 99);
+
+    await User.findByIdAndUpdate(hqUser?._id, { $set: { rtcBalance: 0, 'walletSummary.credits': 0, gamesPlayed: 0, wins: 0, reems: 0 } });
+    const refreshed = await importExistingPlayers(['hq_user_profiles', 'hq_users'], 100);
+    assert.equal(refreshed.updated, 2);
+    const refreshedUser = await User.findOne({ username: 'hq_existing' }).lean();
+    assert.equal(refreshedUser?.rtcBalance, 6400);
+    assert.equal(refreshedUser?.gamesPlayed, 99);
 
     await disconnectDatabase();
   } finally {

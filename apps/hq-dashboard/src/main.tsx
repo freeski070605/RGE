@@ -66,7 +66,7 @@ const endpoints: Record<string, string> = {
 };
 
 const fields: Record<string, string[]> = {
-  Players: ['displayName', 'username', 'email', 'role', 'status', 'tags', 'gamesPlayed', 'wins', 'reems'],
+  Players: ['displayName', 'username', 'rtcBalance', 'gamesPlayed', 'wins', 'reems', 'tags', 'status'],
   Tables: ['tableName', 'stake', 'maxSeats', 'status', 'visibility', 'priority', 'featured'],
   Cribs: ['cribName', 'stakeTier', 'status', 'featured', 'growthPriority', 'description'],
   Events: ['eventName', 'eventType', 'status', 'startTime', 'endTime', 'growthGoal'],

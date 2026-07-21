@@ -44,6 +44,7 @@ const userSchema = z.object({
   drops: z.number().optional(),
   caughtDrops: z.number().optional(),
   referrals: z.number().optional(),
+  rtcBalance: z.number().optional(),
   contentSafe: z.boolean().optional(),
   riskFlags: z.array(z.string()).optional()
 });

@@ -64,6 +64,7 @@ test('ReemTeamHQ CRUD, Growth Plays, Content Studio, and audit log are clean-sla
       wins: 20,
       losses: 13,
       reems: 5,
+      walletSummary: { credits: 1200 },
       tags: ['content_safe']
     });
     server = createApp().listen(port);
@@ -71,6 +72,7 @@ test('ReemTeamHQ CRUD, Growth Plays, Content Studio, and audit log are clean-sla
     const importedPlayers = await api('/api/hq/users');
     assert.equal(importedPlayers.status, 200);
     assert.equal(importedPlayers.payload.some((row: any) => row.username === 'legacy_live'), true);
+    assert.equal(importedPlayers.payload.find((row: any) => row.username === 'legacy_live')?.rtcBalance, 1200);
     assert.equal(await User.countDocuments({ username: 'legacy_live' }), 1);
 
     const user = await api('/api/hq/users', {

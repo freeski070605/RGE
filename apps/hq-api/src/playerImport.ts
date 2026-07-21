@@ -33,7 +33,8 @@ const sourceView = (source: AnyDoc) => ({
   ...(source.player && typeof source.player === 'object' ? source.player : {}),
   ...(source.profile && typeof source.profile === 'object' ? source.profile : {}),
   ...(source.stats && typeof source.stats === 'object' ? source.stats : {}),
-  ...(source.wallet && typeof source.wallet === 'object' ? source.wallet : {})
+  ...(source.wallet && typeof source.wallet === 'object' ? source.wallet : {}),
+  ...(source.walletSummary && typeof source.walletSummary === 'object' ? source.walletSummary : {})
 });
 
 const firstString = (source: AnyDoc, keys: string[]) => {
@@ -109,6 +110,7 @@ export const normalizeLegacyPlayer = (source: AnyDoc, sourceCollection: string) 
   const losses = numberValue(view, ['losses', 'lossCount']);
   const gamesPlayed = numberValue(view, ['gamesPlayed', 'gameCount', 'games', 'totalGames'], wins + losses);
   const riskFlags = Array.isArray(view.riskFlags) ? view.riskFlags.map(String) : [];
+  const rtcBalance = numberValue(view, ['rtcBalance', 'rtc', 'rtcCredits', 'credits', 'balance', 'walletBalance']);
 
   const status = String(view.status ?? '').toLowerCase() === 'suspended' ? 'suspended' : boolValue(view.disabled) ? 'disabled' : 'active';
 
@@ -131,8 +133,9 @@ export const normalizeLegacyPlayer = (source: AnyDoc, sourceCollection: string) 
     drops: numberValue(view, ['drops', 'dropCount']),
     caughtDrops: numberValue(view, ['caughtDrops', 'caughtDropCount']),
     referrals: numberValue(view, ['referrals', 'referralCount']),
+    rtcBalance,
     walletSummary: {
-      credits: numberValue(view, ['credits', 'balance', 'walletBalance']),
+      credits: rtcBalance,
       winnings: numberValue(view, ['winnings', 'totalWinnings']),
       promotionalCredits: numberValue(view, ['promotionalCredits', 'promoCredits']),
       referralCredits: numberValue(view, ['referralCredits'])
@@ -185,11 +188,20 @@ export const autoImportExistingPlayersIfNeeded = async (limit = 10000, db = mong
     const preferredSource = availableCollections.has('hq_user_profiles') ? 'hq_user_profiles' : availableCollections.has('hq_users') ? 'hq_users' : '';
     if (!preferredSource) return null;
 
-    const [legacyCount, hqCount] = await Promise.all([
+    const [legacyCount, hqCount, staleImportedCount] = await Promise.all([
       db.collection(preferredSource).estimatedDocumentCount(),
-      hqModels.User.countDocuments()
+      hqModels.User.countDocuments(),
+      hqModels.User.countDocuments({
+        role: 'player',
+        $or: [
+          { rtcBalance: { $lte: 0 } },
+          { rtcBalance: { $exists: false } },
+          { 'walletSummary.credits': { $lte: 0 } },
+          { 'walletSummary.credits': { $exists: false } }
+        ]
+      })
     ]);
-    if (legacyCount <= hqCount) return null;
+    if (legacyCount <= hqCount && staleImportedCount === 0) return null;
 
     return importExistingPlayers(defaultPlayerSourceCollections, limit, false, db);
   })();
@@ -258,7 +270,7 @@ export const importExistingPlayers = async (collectionNames: string[], limit: nu
               displayName: user.displayName,
               contact: { email: user.email, phone: user.phone },
               tags: user.tags,
-              summary: { gamesPlayed: user.gamesPlayed, wins: user.wins, reems: user.reems, referrals: user.referrals },
+              summary: { gamesPlayed: user.gamesPlayed, wins: user.wins, reems: user.reems, referrals: user.referrals, rtcBalance: user.rtcBalance },
               riskFlags: user.riskFlags,
               contentSafe: user.contentSafe
             }
