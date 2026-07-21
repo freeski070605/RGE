@@ -82,16 +82,48 @@ test('existing players are imported from legacy collections into HQ users and pr
     await mongoose.default.connection.db?.collection('hq_user_profiles').insertOne({
       userId: legacyUserId,
       displayName: 'HQ Existing Player',
-      gamesPlayed: 99,
-      wins: 61,
-      losses: 38,
-      reems: 7,
+      gamesPlayed: 0,
+      wins: 0,
+      losses: 0,
+      reems: 0,
       referralCount: 4,
       averageStake: 35,
       highestStake: 150,
-      walletSummary: { credits: 6400 },
+      walletSummary: { credits: 0 },
       tags: ['vip']
     });
+    await mongoose.default.connection.db?.collection('player_stats_daily').insertMany([
+      {
+        playerId: legacyUserId,
+        username: 'hq_existing',
+        matchesPlayed: 60,
+        wins: 36,
+        reems: 5,
+        caughtDropWins: 2,
+        inviteCount: 3,
+        rewardedInvites: 1,
+        depositAmount: 43000,
+        grossPayout: 12000,
+        avgStake: 40,
+        highestStakeWin: 150,
+        date: new Date()
+      },
+      {
+        playerId: legacyUserId,
+        username: 'hq_existing',
+        matchesPlayed: 39,
+        wins: 25,
+        reems: 2,
+        caughtDropWins: 1,
+        inviteCount: 1,
+        rewardedInvites: 1,
+        depositAmount: 40000,
+        grossPayout: 9000,
+        avgStake: 30,
+        highestStakeWin: 100,
+        date: new Date()
+      }
+    ]);
 
     const hqResult = await importExistingPlayers(['hq_user_profiles', 'hq_users'], 100);
     assert.deepEqual(hqResult.collectionsScanned, ['hq_user_profiles', 'hq_users']);
@@ -102,7 +134,9 @@ test('existing players are imported from legacy collections into HQ users and pr
     assert.equal(hqUser?.gamesPlayed, 99);
     assert.equal(hqUser?.wins, 61);
     assert.equal(hqUser?.highestStake, 150);
-    assert.equal(hqUser?.rtcBalance, 6400);
+    assert.equal(hqUser?.reems, 7);
+    assert.equal(hqUser?.rtcBalance, 83000);
+    assert.equal(hqUser?.walletSummary.winnings, 21000);
     assert.equal(hqUser?.tags.includes('vip'), true);
 
     const hqProfile = await UserProfile.findOne({ userId: hqUser?._id }).lean();
@@ -112,7 +146,7 @@ test('existing players are imported from legacy collections into HQ users and pr
     const refreshed = await importExistingPlayers(['hq_user_profiles', 'hq_users'], 100);
     assert.equal(refreshed.updated, 2);
     const refreshedUser = await User.findOne({ username: 'hq_existing' }).lean();
-    assert.equal(refreshedUser?.rtcBalance, 6400);
+    assert.equal(refreshedUser?.rtcBalance, 83000);
     assert.equal(refreshedUser?.gamesPlayed, 99);
 
     await disconnectDatabase();

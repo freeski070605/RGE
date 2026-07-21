@@ -34,7 +34,8 @@ const sourceView = (source: AnyDoc) => ({
   ...(source.profile && typeof source.profile === 'object' ? source.profile : {}),
   ...(source.stats && typeof source.stats === 'object' ? source.stats : {}),
   ...(source.wallet && typeof source.wallet === 'object' ? source.wallet : {}),
-  ...(source.walletSummary && typeof source.walletSummary === 'object' ? source.walletSummary : {})
+  ...(source.walletSummary && typeof source.walletSummary === 'object' ? source.walletSummary : {}),
+  ...(source.dailyStats && typeof source.dailyStats === 'object' ? source.dailyStats : {})
 });
 
 const firstString = (source: AnyDoc, keys: string[]) => {
@@ -75,6 +76,100 @@ const cleanUsername = (value: string, fallback: string) => {
 };
 
 const cleanEmail = (value: string) => (value.includes('@') ? value.toLowerCase() : undefined);
+const statsKey = (value: unknown) => String(value ?? '').trim().toLowerCase();
+
+const addStatsKey = (map: Map<string, AnyDoc>, key: unknown, stats: AnyDoc) => {
+  const normalized = statsKey(key);
+  if (normalized) map.set(normalized, stats);
+};
+
+const loadDailyStats = async (db: NonNullable<typeof mongoose.connection.db>) => {
+  const collections = new Set((await db.listCollections().toArray()).map((collection) => collection.name));
+  const map = new Map<string, AnyDoc>();
+  if (!collections.has('player_stats_daily')) return map;
+
+  const rows = await db.collection('player_stats_daily').find({}).toArray();
+  const grouped = new Map<string, AnyDoc>();
+  for (const row of rows) {
+    const key = statsKey(row.playerId || row.username);
+    if (!key) continue;
+    const current = grouped.get(key) ?? {
+      aliases: new Set<string>(),
+      matchesPlayed: 0,
+      wins: 0,
+      reems: 0,
+      caughtDrops: 0,
+      referrals: 0,
+      rewardedInvites: 0,
+      rtcBalance: 0,
+      winnings: 0,
+      netPayout: 0,
+      depositCount: 0,
+      avgStakeTotal: 0,
+      avgStakeRows: 0,
+      highestStake: 0,
+      biggestPayout: 0,
+      lastActiveAt: undefined
+    };
+    current.aliases.add(key);
+    const usernameKey = statsKey(row.username);
+    if (usernameKey) current.aliases.add(usernameKey);
+    current.matchesPlayed += numberValue(row, ['matchesPlayed']);
+    current.wins += numberValue(row, ['wins', 'regularWins', 'autoTripleWins', 'caughtDropWins']);
+    current.reems += numberValue(row, ['reems']);
+    current.caughtDrops += numberValue(row, ['caughtDropWins']);
+    current.referrals += numberValue(row, ['inviteCount']);
+    current.rewardedInvites += numberValue(row, ['rewardedInvites']);
+    current.rtcBalance += numberValue(row, ['rtcBalance', 'rtc', 'depositAmount']);
+    current.winnings += numberValue(row, ['grossPayout', 'biggestPayout']);
+    current.netPayout += numberValue(row, ['netPayout']);
+    current.depositCount += numberValue(row, ['depositCount']);
+    const avgStake = numberValue(row, ['avgStake']);
+    if (avgStake > 0) {
+      current.avgStakeTotal += avgStake;
+      current.avgStakeRows += 1;
+    }
+    current.highestStake = Math.max(current.highestStake, numberValue(row, ['highestStakeWin', 'highestStake']));
+    current.biggestPayout = Math.max(current.biggestPayout, numberValue(row, ['biggestPayout']));
+    const rowDate = dateValue(row, ['date', 'updatedAt', 'createdAt']);
+    if (rowDate && (!current.lastActiveAt || rowDate > current.lastActiveAt)) current.lastActiveAt = rowDate;
+    for (const alias of current.aliases) {
+      grouped.set(alias, current);
+    }
+  }
+
+  const seen = new Set<AnyDoc>();
+  for (const [key, value] of grouped.entries()) {
+    if (seen.has(value) && map.has(key)) continue;
+    seen.add(value);
+    const stats = {
+      gamesPlayed: value.matchesPlayed,
+      wins: value.wins,
+      losses: Math.max(0, value.matchesPlayed - value.wins),
+      reems: value.reems,
+      caughtDrops: value.caughtDrops,
+      referrals: value.referrals,
+      referralCredits: value.rewardedInvites,
+      rtcBalance: value.rtcBalance,
+      winnings: value.winnings || value.netPayout,
+      averageStake: value.avgStakeRows ? value.avgStakeTotal / value.avgStakeRows : 0,
+      highestStake: value.highestStake,
+      biggestPayout: value.biggestPayout,
+      depositCount: value.depositCount,
+      lastActiveAt: value.lastActiveAt
+    };
+    addStatsKey(map, key, stats);
+  }
+  return map;
+};
+
+const findDailyStats = (map: Map<string, AnyDoc>, source: AnyDoc, userDoc?: AnyDoc | null) =>
+  map.get(statsKey(source.playerId)) ??
+  map.get(statsKey(source.userId)) ??
+  map.get(statsKey(userDoc?._id)) ??
+  map.get(statsKey(source.username)) ??
+  map.get(statsKey(userDoc?.username)) ??
+  null;
 
 const rawTags = (source: AnyDoc) => {
   const tags = new Set<string>();
@@ -138,7 +233,7 @@ export const normalizeLegacyPlayer = (source: AnyDoc, sourceCollection: string) 
       credits: rtcBalance,
       winnings: numberValue(view, ['winnings', 'totalWinnings']),
       promotionalCredits: numberValue(view, ['promotionalCredits', 'promoCredits']),
-      referralCredits: numberValue(view, ['referralCredits'])
+      referralCredits: numberValue(view, ['referralCredits', 'rewardedInvites'])
     },
     riskFlags,
     contentSafe: !boolValue(view.doNotFeature) && !boolValue(view.contentUnsafe),
@@ -228,6 +323,7 @@ export const importExistingPlayers = async (collectionNames: string[], limit: nu
     updated: 0,
     skipped: 0
   };
+  const dailyStats = await loadDailyStats(db);
 
   for (const collectionName of requested) {
     if (!availableCollections.has(collectionName)) continue;
@@ -239,7 +335,8 @@ export const importExistingPlayers = async (collectionNames: string[], limit: nu
         collectionName === 'hq_user_profiles' && doc.userId
           ? await db.collection('hq_users').findOne({ _id: doc.userId })
           : null;
-      const player = normalizeLegacyPlayer(userDoc ? { ...userDoc, ...doc, user: userDoc } : doc, collectionName);
+      const daily = findDailyStats(dailyStats, doc, userDoc);
+      const player = normalizeLegacyPlayer(userDoc ? { ...userDoc, ...doc, user: userDoc, dailyStats: daily } : { ...doc, dailyStats: daily }, collectionName);
       if (!player) {
         result.skipped += 1;
         continue;
