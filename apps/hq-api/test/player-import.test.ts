@@ -22,19 +22,23 @@ test('existing players are imported from legacy collections into HQ users and pr
     const { User, UserProfile } = await import('../src/models.js');
 
     await connectDatabase();
-    await mongoose.default.connection.db?.collection('players').insertMany([
+    await mongoose.default.connection.db?.collection('user').insertMany([
       {
-        displayName: 'Legacy Ace',
-        username: 'Legacy Ace!',
-        email: 'ace@example.com',
-        gamesPlayed: 44,
-        wins: 25,
-        losses: 19,
-        reems: 3,
-        referrals: 8,
-        averageStake: 55,
-        lastLoginAt: new Date().toISOString(),
-        contentSafe: true
+        user: {
+          displayName: 'Legacy Ace',
+          username: 'Legacy Ace!',
+          email: 'ace@example.com',
+          lastLoginAt: new Date().toISOString(),
+          contentSafe: true
+        },
+        stats: {
+          gamesPlayed: 44,
+          wins: 25,
+          losses: 19,
+          reems: 3,
+          referrals: 8,
+          averageStake: 55
+        }
       },
       {
         displayName: 'Legacy Admin',
@@ -43,8 +47,9 @@ test('existing players are imported from legacy collections into HQ users and pr
       }
     ]);
 
-    const result = await importExistingPlayers(['players'], 100);
-    assert.deepEqual(result.collectionsScanned, ['players']);
+    const result = await importExistingPlayers(['players', 'user'], 100);
+    assert.deepEqual(result.collectionsScanned, ['user']);
+    assert.deepEqual(result.collectionsMissing, ['players']);
     assert.equal(result.imported, 1);
     assert.equal(result.skipped, 1);
 
@@ -57,7 +62,7 @@ test('existing players are imported from legacy collections into HQ users and pr
     const profile = await UserProfile.findOne({ userId: user?._id }).lean();
     assert.equal(profile?.displayName, 'Legacy Ace');
 
-    const rerun = await importExistingPlayers(['players'], 100);
+    const rerun = await importExistingPlayers(['user'], 100);
     assert.equal(rerun.imported, 0);
     assert.equal(rerun.updated, 1);
 

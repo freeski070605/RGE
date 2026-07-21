@@ -5,7 +5,10 @@ import { hqModels } from './services.js';
 type AnyDoc = Record<string, any>;
 
 export type PlayerImportResult = {
+  collectionsRequested: string[];
+  collectionsAvailable: string[];
   collectionsScanned: string[];
+  collectionsMissing: string[];
   imported: number;
   updated: number;
   skipped: number;
@@ -19,6 +22,17 @@ export type LegacyCollectionSummary = {
 
 const allowedTags = new Set<string>(playerTags);
 const adminRoles = new Set(['owner', 'admin', 'operator', 'moderator', 'support']);
+
+export const defaultPlayerSourceCollections = ['players', 'Players', 'player', 'Player', 'users', 'Users', 'user', 'User'];
+
+const sourceView = (source: AnyDoc) => ({
+  ...source,
+  ...(source.user && typeof source.user === 'object' ? source.user : {}),
+  ...(source.player && typeof source.player === 'object' ? source.player : {}),
+  ...(source.profile && typeof source.profile === 'object' ? source.profile : {}),
+  ...(source.stats && typeof source.stats === 'object' ? source.stats : {}),
+  ...(source.wallet && typeof source.wallet === 'object' ? source.wallet : {})
+});
 
 const firstString = (source: AnyDoc, keys: string[]) => {
   for (const key of keys) {
@@ -75,25 +89,26 @@ const rawTags = (source: AnyDoc) => {
 };
 
 export const normalizeLegacyPlayer = (source: AnyDoc, sourceCollection: string) => {
-  const sourceId = String(source._id ?? source.id ?? source.userId ?? '');
-  const role = String(source.role ?? source.accountType ?? '').toLowerCase();
+  const view = sourceView(source);
+  const sourceId = String(source._id ?? view._id ?? view.id ?? view.userId ?? '');
+  const role = String(view.role ?? view.accountType ?? view.type ?? '').toLowerCase();
   if (!sourceId || adminRoles.has(role)) return null;
 
-  const email = cleanEmail(firstString(source, ['email', 'emailAddress']));
-  const phone = firstString(source, ['phone', 'phoneNumber', 'mobile']);
+  const email = cleanEmail(firstString(view, ['email', 'emailAddress']));
+  const phone = firstString(view, ['phone', 'phoneNumber', 'mobile']);
   const displayName =
-    firstString(source, ['displayName', 'name', 'fullName', 'playerName', 'firstName']) ||
-    firstString(source, ['username', 'userName', 'handle']) ||
+    firstString(view, ['displayName', 'name', 'fullName', 'playerName', 'firstName']) ||
+    firstString(view, ['username', 'userName', 'handle']) ||
     email ||
     phone ||
     `Player ${sourceId.slice(-6)}`;
-  const username = cleanUsername(firstString(source, ['username', 'userName', 'handle', 'slug']) || displayName, `player_${sourceId.slice(-8).toLowerCase()}`);
-  const wins = numberValue(source, ['wins', 'winCount']);
-  const losses = numberValue(source, ['losses', 'lossCount']);
-  const gamesPlayed = numberValue(source, ['gamesPlayed', 'gameCount', 'games', 'totalGames'], wins + losses);
-  const riskFlags = Array.isArray(source.riskFlags) ? source.riskFlags.map(String) : [];
+  const username = cleanUsername(firstString(view, ['username', 'userName', 'handle', 'slug']) || displayName, `player_${sourceId.slice(-8).toLowerCase()}`);
+  const wins = numberValue(view, ['wins', 'winCount']);
+  const losses = numberValue(view, ['losses', 'lossCount']);
+  const gamesPlayed = numberValue(view, ['gamesPlayed', 'gameCount', 'games', 'totalGames'], wins + losses);
+  const riskFlags = Array.isArray(view.riskFlags) ? view.riskFlags.map(String) : [];
 
-  const status = String(source.status ?? '').toLowerCase() === 'suspended' ? 'suspended' : boolValue(source.disabled) ? 'disabled' : 'active';
+  const status = String(view.status ?? '').toLowerCase() === 'suspended' ? 'suspended' : boolValue(view.disabled) ? 'disabled' : 'active';
 
   return {
     displayName,
@@ -102,26 +117,26 @@ export const normalizeLegacyPlayer = (source: AnyDoc, sourceCollection: string) 
     phone: phone || undefined,
     role: 'player' as const,
     status: status as 'active' | 'disabled' | 'suspended',
-    tags: rawTags(source),
-    lastActiveAt: dateValue(source, ['lastActiveAt', 'lastLoginAt', 'updatedAt']),
-    favoriteCrib: firstString(source, ['favoriteCrib', 'cribName']) || undefined,
-    averageStake: numberValue(source, ['averageStake', 'avgStake']),
-    highestStake: numberValue(source, ['highestStake', 'maxStake', 'biggestStake']),
+    tags: rawTags(view),
+    lastActiveAt: dateValue(view, ['lastActiveAt', 'lastLoginAt', 'updatedAt']),
+    favoriteCrib: firstString(view, ['favoriteCrib', 'cribName']) || undefined,
+    averageStake: numberValue(view, ['averageStake', 'avgStake']),
+    highestStake: numberValue(view, ['highestStake', 'maxStake', 'biggestStake']),
     gamesPlayed,
     wins,
     losses,
-    reems: numberValue(source, ['reems', 'reemCount']),
-    drops: numberValue(source, ['drops', 'dropCount']),
-    caughtDrops: numberValue(source, ['caughtDrops', 'caughtDropCount']),
-    referrals: numberValue(source, ['referrals', 'referralCount']),
+    reems: numberValue(view, ['reems', 'reemCount']),
+    drops: numberValue(view, ['drops', 'dropCount']),
+    caughtDrops: numberValue(view, ['caughtDrops', 'caughtDropCount']),
+    referrals: numberValue(view, ['referrals', 'referralCount']),
     walletSummary: {
-      credits: numberValue(source, ['credits', 'balance', 'walletBalance']),
-      winnings: numberValue(source, ['winnings', 'totalWinnings']),
-      promotionalCredits: numberValue(source, ['promotionalCredits', 'promoCredits']),
-      referralCredits: numberValue(source, ['referralCredits'])
+      credits: numberValue(view, ['credits', 'balance', 'walletBalance']),
+      winnings: numberValue(view, ['winnings', 'totalWinnings']),
+      promotionalCredits: numberValue(view, ['promotionalCredits', 'promoCredits']),
+      referralCredits: numberValue(view, ['referralCredits'])
     },
     riskFlags,
-    contentSafe: !boolValue(source.doNotFeature) && !boolValue(source.contentUnsafe),
+    contentSafe: !boolValue(view.doNotFeature) && !boolValue(view.contentUnsafe),
     legacy: { sourceCollection, sourceId, importedAt: new Date() }
   };
 };
@@ -159,9 +174,18 @@ export const importExistingPlayers = async (collectionNames: string[], limit: nu
   if (!db) throw new Error('MongoDB is not connected.');
 
   const availableCollections = new Set((await db.listCollections().toArray()).map((collection) => collection.name));
-  const result: PlayerImportResult = { collectionsScanned: [], imported: 0, updated: 0, skipped: 0 };
+  const requested = Array.from(new Set(collectionNames));
+  const result: PlayerImportResult = {
+    collectionsRequested: requested,
+    collectionsAvailable: Array.from(availableCollections).sort(),
+    collectionsScanned: [],
+    collectionsMissing: requested.filter((collectionName) => !availableCollections.has(collectionName)),
+    imported: 0,
+    updated: 0,
+    skipped: 0
+  };
 
-  for (const collectionName of collectionNames) {
+  for (const collectionName of requested) {
     if (!availableCollections.has(collectionName)) continue;
     result.collectionsScanned.push(collectionName);
     const docs = await db.collection(collectionName).find({}).limit(limit).toArray();

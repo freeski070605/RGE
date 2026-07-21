@@ -1,8 +1,8 @@
 import mongoose from 'mongoose';
 import { connectDatabase, disconnectDatabase } from './db.js';
-import { importExistingPlayers } from './playerImport.js';
+import { defaultPlayerSourceCollections, importExistingPlayers } from './playerImport.js';
 
-const collectionNames = (process.env.PLAYER_SOURCE_COLLECTIONS ?? 'players,Players,users,Users')
+const collectionNames = (process.env.PLAYER_SOURCE_COLLECTIONS ?? defaultPlayerSourceCollections.join(','))
   .split(',')
   .map((collection) => collection.trim())
   .filter(Boolean);
