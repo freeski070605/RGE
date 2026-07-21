@@ -207,6 +207,10 @@ export const importExistingPlayers = async (collectionNames: string[], limit: nu
       ];
       if (player.email) filters.push({ email: player.email });
       const existing = await hqModels.User.findOne({ $or: filters });
+      if (existing && collectionName === 'hq_users') {
+        result.updated += 1;
+        continue;
+      }
       const username = existing ? player.username : await uniqueUsername(player.username);
 
       if (!dryRun) {
