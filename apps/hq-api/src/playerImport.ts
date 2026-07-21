@@ -14,6 +14,8 @@ export type PlayerImportResult = {
   skipped: number;
 };
 
+export type PlayerAutoImportResult = PlayerImportResult | null;
+
 export type LegacyCollectionSummary = {
   collection: string;
   count: number;
@@ -168,6 +170,36 @@ export const inspectLegacyCollections = async (db = mongoose.connection.db): Pro
     });
   }
   return summaries.sort((left, right) => right.count - left.count);
+};
+
+let lastAutoImportAt = 0;
+let activeAutoImport: Promise<PlayerAutoImportResult> | null = null;
+
+export const autoImportExistingPlayersIfNeeded = async (limit = 10000, db = mongoose.connection.db): Promise<PlayerAutoImportResult> => {
+  if (!db) return null;
+  if (activeAutoImport) return activeAutoImport;
+  if (Date.now() - lastAutoImportAt < 60_000) return null;
+
+  activeAutoImport = (async () => {
+    const availableCollections = new Set((await db.listCollections().toArray()).map((collection) => collection.name));
+    const preferredSource = availableCollections.has('hq_user_profiles') ? 'hq_user_profiles' : availableCollections.has('hq_users') ? 'hq_users' : '';
+    if (!preferredSource) return null;
+
+    const [legacyCount, hqCount] = await Promise.all([
+      db.collection(preferredSource).estimatedDocumentCount(),
+      hqModels.User.countDocuments()
+    ]);
+    if (legacyCount <= hqCount) return null;
+
+    return importExistingPlayers(defaultPlayerSourceCollections, limit, false, db);
+  })();
+
+  try {
+    return await activeAutoImport;
+  } finally {
+    lastAutoImportAt = Date.now();
+    activeAutoImport = null;
+  }
 };
 
 export const importExistingPlayers = async (collectionNames: string[], limit: number, dryRun = false, db = mongoose.connection.db): Promise<PlayerImportResult> => {

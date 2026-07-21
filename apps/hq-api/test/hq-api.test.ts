@@ -45,11 +45,33 @@ test('ReemTeamHQ CRUD, Growth Plays, Content Studio, and audit log are clean-sla
     const { createApp } = appModule;
     const { connectDatabase } = dbModule;
     disconnectDatabase = dbModule.disconnectDatabase;
-    const { AdminActionLog } = modelModule;
+    const { AdminActionLog, User } = modelModule;
 
     await connectDatabase();
     await mongoose.default.connection.db?.dropDatabase();
+    const legacyUserId = new mongoose.default.Types.ObjectId();
+    await mongoose.default.connection.db?.collection('hq_users').insertOne({
+      _id: legacyUserId,
+      displayName: 'Legacy Live Player',
+      username: 'legacy_live',
+      role: 'player',
+      status: 'active'
+    });
+    await mongoose.default.connection.db?.collection('hq_user_profiles').insertOne({
+      userId: legacyUserId,
+      displayName: 'Legacy Live Player',
+      gamesPlayed: 33,
+      wins: 20,
+      losses: 13,
+      reems: 5,
+      tags: ['content_safe']
+    });
     server = createApp().listen(port);
+
+    const importedPlayers = await api('/api/hq/users');
+    assert.equal(importedPlayers.status, 200);
+    assert.equal(importedPlayers.payload.some((row: any) => row.username === 'legacy_live'), true);
+    assert.equal(await User.countDocuments({ username: 'legacy_live' }), 1);
 
     const user = await api('/api/hq/users', {
       method: 'POST',

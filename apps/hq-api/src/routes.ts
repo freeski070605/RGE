@@ -6,14 +6,13 @@ import { logAdminAction } from './audit.js';
 import {
   buildContentDraft,
   createGrowthPlayFromSignal,
-  dashboardCollections,
   generateGrowthPlaysFromSignals,
   getCommandCenter,
   getSystemHealth,
   hqModels,
-  logStatusAction,
   serialize
 } from './services.js';
+import { autoImportExistingPlayersIfNeeded, defaultPlayerSourceCollections, importExistingPlayers } from './playerImport.js';
 
 export const router = Router();
 
@@ -50,6 +49,11 @@ const userSchema = z.object({
 });
 const userUpdateSchema = userSchema.partial();
 const statusSchema = z.object({ status: z.enum(['active', 'disabled', 'suspended']) });
+const playerImportSchema = z.object({
+  collections: z.array(z.string().min(1)).optional(),
+  limit: z.number().int().positive().max(100000).optional(),
+  dryRun: z.boolean().optional()
+});
 const tagUpdateSchema = z.object({ add: z.array(tagSchema).optional(), remove: z.array(tagSchema).optional(), set: z.array(tagSchema).optional() });
 const noteSchema = z.object({ note: z.string().min(1), visibility: z.enum(['internal', 'owner_only']).optional() });
 const cribSchema = z.object({
@@ -202,6 +206,7 @@ router.use('/hq', requireAuth);
 router.get('/hq/command-center', asyncRoute(async (_request: any, response: any) => response.json(await getCommandCenter())));
 
 router.get('/hq/users', asyncRoute(async (request: any, response: any) => {
+  await autoImportExistingPlayersIfNeeded();
   const search = typeof request.query.search === 'string' ? request.query.search : '';
   const query = search ? { $or: [{ displayName: new RegExp(search, 'i') }, { username: new RegExp(search, 'i') }, { email: new RegExp(search, 'i') }] } : {};
   await list(hqModels.User, response, query);
@@ -212,6 +217,18 @@ router.post('/hq/users', requireRoles(['owner', 'admin', 'operator']), asyncRout
   await hqModels.UserProfile.findOneAndUpdate({ userId: user._id }, { $set: { userId: user._id, displayName: user.displayName, contact: { email: user.email, phone: user.phone }, tags: user.tags, contentSafe: user.contentSafe } }, { upsert: true });
   await logAdminAction(request.operator, { actionType: 'user_created', targetType: 'user', targetId: String(user._id), description: `Created ${user.displayName}.` });
   response.status(201).json(serialize(user));
+}));
+router.post('/hq/users/import-existing', requireRoles(['owner', 'admin', 'operator']), asyncRoute(async (request: any, response: any) => {
+  const body = playerImportSchema.parse(request.body ?? {});
+  const result = await importExistingPlayers(body.collections ?? defaultPlayerSourceCollections, body.limit ?? 10000, body.dryRun ?? false);
+  await logAdminAction(request.operator, {
+    actionType: 'players_imported',
+    targetType: 'user',
+    targetId: 'legacy-player-import',
+    description: `${body.dryRun ? 'Checked' : 'Imported'} existing players from legacy HQ collections.`,
+    metadata: result
+  });
+  response.json(result);
 }));
 router.get('/hq/users/:id', asyncRoute(async (request: any, response: any) => {
   const { id } = idParam.parse(request.params);
