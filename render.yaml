@@ -1,9 +1,9 @@
 services:
   - type: web
-    name: reemteam-hq
+    name: rge-api
     env: node
     plan: starter
-    buildCommand: npm ci --include=optional && npm run build
+    buildCommand: npm install --include=optional && npm run build
     startCommand: npm start
     healthCheckPath: /api/hq/system-health
     envVars:
