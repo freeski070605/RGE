@@ -20,7 +20,10 @@ npm run dev
 npm run dev:dashboard
 npm run build
 npm test
+npm run seed:players -w @reemteam/hq-api
 ```
+
+`seed:players` imports/upserts existing Atlas players into the new HQ `users` and `user_profiles` collections. Set `MONGODB_URI` plus optional `PLAYER_SOURCE_COLLECTIONS`, `PLAYER_IMPORT_LIMIT`, and `PLAYER_IMPORT_DRY_RUN=true` before running it.
 
 ## Product Loop
 

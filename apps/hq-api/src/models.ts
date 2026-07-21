@@ -54,7 +54,12 @@ const UserSchema = new Schema(
     },
     supportHistory: { type: [Schema.Types.Mixed], default: [] },
     riskFlags: { type: [String], default: [] },
-    contentSafe: { type: Boolean, default: true }
+    contentSafe: { type: Boolean, default: true },
+    legacy: {
+      sourceCollection: { type: String, index: true },
+      sourceId: { type: String, index: true },
+      importedAt: Date
+    }
   },
   { timestamps: true, collection: 'users' }
 );
