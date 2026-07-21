@@ -30,7 +30,20 @@ const userSchema = z.object({
   phone: z.string().optional(),
   role: roleSchema.optional(),
   status: z.enum(['active', 'disabled', 'suspended']).optional(),
-  tags: z.array(tagSchema).optional()
+  tags: z.array(tagSchema).optional(),
+  lastActiveAt: z.coerce.date().optional(),
+  favoriteCrib: z.string().optional(),
+  averageStake: z.number().optional(),
+  highestStake: z.number().optional(),
+  gamesPlayed: z.number().optional(),
+  wins: z.number().optional(),
+  losses: z.number().optional(),
+  reems: z.number().optional(),
+  drops: z.number().optional(),
+  caughtDrops: z.number().optional(),
+  referrals: z.number().optional(),
+  contentSafe: z.boolean().optional(),
+  riskFlags: z.array(z.string()).optional()
 });
 const userUpdateSchema = userSchema.partial();
 const tagUpdateSchema = z.object({ add: z.array(tagSchema).optional(), remove: z.array(tagSchema).optional(), set: z.array(tagSchema).optional() });

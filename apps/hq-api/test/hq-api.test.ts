@@ -1,10 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { MongoMemoryServer } from 'mongodb-memory-server';
-import mongoose from 'mongoose';
-import { createApp } from '../src/app.js';
-import { connectDatabase, disconnectDatabase } from '../src/db.js';
-import { AdminActionLog } from '../src/models.js';
 
 const port = 4545;
 const baseUrl = `http://127.0.0.1:${port}`;
@@ -24,7 +20,8 @@ const api = async (path: string, init?: { method?: string; body?: unknown }) => 
 
 test('ReemTeamHQ CRUD, Growth Plays, Content Studio, and audit log are clean-slate native', async (t) => {
   let mongo: MongoMemoryServer | null = null;
-  let server: ReturnType<ReturnType<typeof createApp>['listen']> | null = null;
+  let server: { close: (callback: (error?: Error) => void) => void } | null = null;
+  let disconnectDatabase: (() => Promise<void>) | null = null;
 
   try {
     mongo = await MongoMemoryServer.create();
@@ -41,8 +38,17 @@ test('ReemTeamHQ CRUD, Growth Plays, Content Studio, and audit log are clean-sla
     process.env.OPERATOR_EMAIL = 'owner@test.local';
     process.env.OPERATOR_PASSWORD = 'password';
     process.env.OPERATOR_NAME = 'Owner';
+    const mongoose = await import('mongoose');
+    const appModule = await import('../src/app.js');
+    const dbModule = await import('../src/db.js');
+    const modelModule = await import('../src/models.js');
+    const { createApp } = appModule;
+    const { connectDatabase } = dbModule;
+    disconnectDatabase = dbModule.disconnectDatabase;
+    const { AdminActionLog } = modelModule;
+
     await connectDatabase();
-    await mongoose.connection.db?.dropDatabase();
+    await mongoose.default.connection.db?.dropDatabase();
     server = createApp().listen(port);
 
     const user = await api('/api/hq/users', {
@@ -56,7 +62,7 @@ test('ReemTeamHQ CRUD, Growth Plays, Content Studio, and audit log are clean-sla
         gamesPlayed: 12
       }
     });
-    assert.equal(user.status, 201);
+    assert.equal(user.status, 201, JSON.stringify(user.payload));
 
     const tagged = await api(`/api/hq/users/${user.payload.id}/tags`, {
       method: 'PATCH',
@@ -155,7 +161,9 @@ test('ReemTeamHQ CRUD, Growth Plays, Content Studio, and audit log are clean-sla
     if (server) {
       await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
     }
-    await disconnectDatabase();
+    if (disconnectDatabase) {
+      await disconnectDatabase();
+    }
     await mongo.stop();
   }
 });

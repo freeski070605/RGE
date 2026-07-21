@@ -5,7 +5,7 @@ const objectId = Schema.Types.ObjectId;
 
 const AdminActionLogSchema = new Schema(
   {
-    actorId: { type: objectId, ref: 'User', index: true },
+    actorId: { type: String, index: true },
     actorRole: { type: String, enum: hqRoles, required: true, index: true },
     actionType: { type: String, required: true, index: true },
     targetType: { type: String, required: true, index: true },
