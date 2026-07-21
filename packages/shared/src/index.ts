@@ -22,6 +22,7 @@ export const hqSections = [
   'Tables',
   'Cribs',
   'Events',
+  'Campaigns',
   'Game Intelligence',
   'Growth Plays',
   'Content Studio',

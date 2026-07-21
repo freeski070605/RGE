@@ -19,35 +19,75 @@ import {
   Shield,
   Sparkles,
   Table2,
+  Target,
   Users
 } from 'lucide-react';
 import { hqSections } from '@reemteam/shared';
 import './styles.css';
 
+type AnyRow = Record<string, any>;
 type Operator = { email: string; name: string; role: string };
-type Metric = { label: string; value: string | number; tone: string };
-type CommandCenter = {
-  product: string;
-  sentence: string;
-  loop: string[];
-  metrics: Metric[];
-  recommendedActions: GrowthPlay[];
-  urgentAlerts: GrowthPlay[];
-  bestGrowthMove: GrowthPlay | null;
-  systemHealth: string;
+type Health = { status: string; checks: AnyRow[]; counts: Record<string, number>; database?: AnyRow };
+type CommandCenter = { sentence: string; metrics: AnyRow[]; recommendedActions: AnyRow[]; urgentAlerts: AnyRow[]; systemHealth: string };
+
+const icons = [LayoutDashboard, Users, Table2, Crown, CalendarDays, Target, Activity, Flame, Megaphone, HeartHandshake, Coins, Shield, BarChart3, CheckCircle2, Settings];
+const nav = hqSections;
+
+const defaults: Record<string, AnyRow> = {
+  Players: { displayName: '', username: '', email: '', role: 'player', tags: ['new_player'], status: 'active' },
+  Tables: { tableName: '', cribId: '', stake: 5, maxSeats: 4, status: 'open', visibility: 'public' },
+  Cribs: { cribName: '', description: '', stakeTier: 'low', theme: 'classic', status: 'active', growthPriority: 50, eventEligible: true },
+  Events: { eventName: '', eventType: 'reem_chase', description: '', startTime: localDate(1), endTime: localDate(4), status: 'scheduled', contentGoal: '', growthGoal: '' },
+  Campaigns: { campaignName: '', campaignType: 'promote_friday_night_reem', description: '', priority: 50, status: 'draft' },
+  'Game Intelligence': { signalType: 'reem_detected', sourceType: 'gameplay', sourceId: `manual-${Date.now()}`, title: '', description: '', occurredAt: new Date().toISOString(), severity: 'high', confidence: 90, visibilitySafe: true },
+  'Content Studio': { title: '', format: 'IG Story', channel: 'Content Studio', caption: '', hook: '', overlayText: '', cta: 'Join the action', status: 'draft' },
+  Referrals: { ownerUserId: '', code: '', status: 'active', rewardAmount: 0 },
+  'Wallet/Ops': { userId: '', amount: 0, reason: '' },
+  Support: { userId: '', title: '', severity: 'medium', status: 'open', notes: [] },
+  Analytics: { channel: 'IG Story', format: 'Leaderboard card', metric: 'table_joins', value: 0, learning: '' },
+  Settings: { automationMode: 'assisted', approvedChannels: ['Content Studio', 'In-app banner', 'Push notification'], approvedFormats: ['IG Story', 'Leaderboard card', 'Referral promo'], activeCampaign: '' }
 };
-type User = { id: string; displayName: string; username: string; role: string; status: string; tags: string[]; gamesPlayed: number; wins: number; reems: number; walletSummary?: Record<string, number> };
-type Crib = { id: string; cribName: string; description: string; stakeTier: string; status: string; featured: boolean; growthPriority: number };
-type TableRecord = { id: string; tableName: string; stake: number; maxSeats: number; status: string; visibility: string; priority: number };
-type EventRecord = { id: string; eventName: string; eventType: string; status: string; startTime: string; endTime: string; growthGoal?: string };
-type Signal = { id: string; signalType: string; title: string; description: string; severity: string; confidence: number; occurredAt: string; visibilitySafe: boolean };
-type GrowthPlay = { id: string; title: string; goal: string; playType: string; recommendedAction: string; recommendedFormat: string; whyItMatters: string; whyThis: { sourceSignals?: string[]; scoreBoosts?: string[]; penalties?: string[]; campaignFit?: string; recommendedActionReason?: string; riskVisibilityNotes?: string[] }; urgency: string; confidence: number; finalScore: number; status: string };
-type Draft = { id: string; title: string; format: string; channel: string; caption: string; status: string };
-type Health = { status: string; checks: Array<{ component: string; status: string; detail: string }>; counts: Record<string, number> };
 
-const icons = [LayoutDashboard, Users, Table2, Crown, CalendarDays, Activity, Flame, Megaphone, HeartHandshake, Coins, Shield, BarChart3, CheckCircle2, Settings];
+const endpoints: Record<string, string> = {
+  Players: '/hq/users',
+  Tables: '/hq/tables',
+  Cribs: '/hq/cribs',
+  Events: '/hq/events',
+  Campaigns: '/hq/campaigns',
+  'Game Intelligence': '/hq/game-intelligence/signals',
+  'Growth Plays': '/hq/growth-plays',
+  'Content Studio': '/hq/content-drafts',
+  Referrals: '/hq/referrals',
+  'Wallet/Ops': '/hq/wallet',
+  Support: '/hq/support',
+  Analytics: '/hq/analytics',
+  'System Health': '/hq/system-health',
+  Settings: '/hq/settings'
+};
 
-const api = async <T,>(path: string, init?: RequestInit): Promise<T> => {
+const fields: Record<string, string[]> = {
+  Players: ['displayName', 'username', 'email', 'role', 'status', 'tags', 'gamesPlayed', 'wins', 'reems'],
+  Tables: ['tableName', 'stake', 'maxSeats', 'status', 'visibility', 'priority', 'featured'],
+  Cribs: ['cribName', 'stakeTier', 'status', 'featured', 'growthPriority', 'description'],
+  Events: ['eventName', 'eventType', 'status', 'startTime', 'endTime', 'growthGoal'],
+  Campaigns: ['campaignName', 'campaignType', 'status', 'priority', 'description'],
+  'Game Intelligence': ['signalType', 'title', 'severity', 'confidence', 'visibilitySafe', 'status'],
+  'Growth Plays': ['title', 'playType', 'urgency', 'finalScore', 'status', 'recommendedAction'],
+  'Content Studio': ['title', 'format', 'channel', 'caption', 'status', 'scheduledFor'],
+  Referrals: ['code', 'ownerUserId', 'invitedUserId', 'status', 'rewardAmount', 'abuseFlags'],
+  'Wallet/Ops': ['userId', 'type', 'amount', 'reason', 'suspicious'],
+  Support: ['title', 'userId', 'severity', 'status', 'notes'],
+  Analytics: ['learning', 'channel', 'format', 'metric', 'value'],
+  'System Health': ['component', 'status', 'detail'],
+  Settings: ['automationMode', 'approvedChannels', 'approvedFormats', 'activeCampaign']
+};
+
+function localDate(hours: number) {
+  const date = new Date(Date.now() + hours * 60 * 60 * 1000);
+  return date.toISOString().slice(0, 16);
+}
+
+async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`/api${path}`, {
     ...init,
     headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
@@ -59,52 +99,60 @@ const api = async <T,>(path: string, init?: RequestInit): Promise<T> => {
   }
   if (response.status === 204) return null as T;
   return response.json();
-};
+}
 
 function App() {
   const [operator, setOperator] = useState<Operator | null>(null);
   const [email, setEmail] = useState('owner@reemteam.local');
   const [password, setPassword] = useState('');
-  const [active, setActive] = useState('Command Center');
+  const [active, setActive] = useState<string>('Command Center');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [toast, setToast] = useState('');
   const [commandCenter, setCommandCenter] = useState<CommandCenter | null>(null);
-  const [users, setUsers] = useState<User[]>([]);
-  const [cribs, setCribs] = useState<Crib[]>([]);
-  const [tables, setTables] = useState<TableRecord[]>([]);
-  const [events, setEvents] = useState<EventRecord[]>([]);
-  const [signals, setSignals] = useState<Signal[]>([]);
-  const [growthPlays, setGrowthPlays] = useState<GrowthPlay[]>([]);
-  const [drafts, setDrafts] = useState<Draft[]>([]);
   const [health, setHealth] = useState<Health | null>(null);
+  const [data, setData] = useState<Record<string, any>>({});
+  const [draft, setDraft] = useState<Record<string, AnyRow>>(() => ({ ...defaults }));
+  const [selected, setSelected] = useState<AnyRow | null>(null);
 
-  const refresh = async () => {
-    const [command, userRows, cribRows, tableRows, eventRows, signalRows, playRows, draftRows, healthView] = await Promise.all([
-      api<CommandCenter>('/hq/command-center'),
-      api<User[]>('/hq/users'),
-      api<Crib[]>('/hq/cribs'),
-      api<TableRecord[]>('/hq/tables'),
-      api<EventRecord[]>('/hq/events'),
-      api<Signal[]>('/hq/game-intelligence/signals'),
-      api<GrowthPlay[]>('/hq/growth-plays'),
-      api<Draft[]>('/hq/content-drafts'),
-      api<Health>('/hq/system-health')
-    ]);
-    setCommandCenter(command);
-    setUsers(userRows);
-    setCribs(cribRows);
-    setTables(tableRows);
-    setEvents(eventRows);
-    setSignals(signalRows);
-    setGrowthPlays(playRows);
-    setDrafts(draftRows);
-    setHealth(healthView);
+  const loadAll = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const [command, systemHealth] = await Promise.all([api<CommandCenter>('/hq/command-center'), api<Health>('/hq/system-health')]);
+      const next: Record<string, any> = {};
+      await Promise.all(
+        Object.entries(endpoints).map(async ([key, endpoint]) => {
+          if (key === 'System Health') return;
+          if (key === 'Settings') {
+            next[key] = await api(endpoint);
+            return;
+          }
+          if (key === 'Analytics') {
+            const analytics = await api<any>(endpoint);
+            next[key] = analytics.results ?? [];
+            next.whatWorked = await api('/hq/analytics/what-worked');
+            return;
+          }
+          next[key] = await api(endpoint);
+        })
+      );
+      setCommandCenter(command);
+      setHealth(systemHealth);
+      next['System Health'] = systemHealth.checks ?? [];
+      setData(next);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to load ReemTeamHQ data');
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
     api<{ operator: Operator }>('/auth/me')
       .then((session) => {
         setOperator(session.operator);
-        return refresh();
+        return loadAll();
       })
       .catch(() => undefined);
   }, []);
@@ -115,9 +163,9 @@ function App() {
       const session = await api<{ operator: Operator }>('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
       setOperator(session.operator);
       setToast('Signed into ReemTeamHQ.');
-      await refresh();
-    } catch (error) {
-      setToast(error instanceof Error ? error.message : 'Unable to sign in');
+      await loadAll();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to sign in');
     }
   };
 
@@ -126,65 +174,38 @@ function App() {
     setOperator(null);
   };
 
-  const createSeedSignal = async () => {
-    const signal = await api<Signal>('/hq/game-intelligence/signals', {
-      method: 'POST',
-      body: JSON.stringify({
-        signalType: 'crib_heating_up_detected',
-        sourceType: 'gameplay',
-        sourceId: `manual-${Date.now()}`,
-        title: 'The Back Room is heating up',
-        description: 'Three active games landed in the last hour, including a Reem and one caught drop.',
-        occurredAt: new Date().toISOString(),
-        severity: 'high',
-        confidence: 91,
-        visibilitySafe: true
-      })
+  const submit = async (page: string) => {
+    const body = normalizePayload(draft[page] ?? {});
+    const endpoint = page === 'Analytics' ? '/hq/analytics/performance-results' : page === 'Wallet/Ops' ? '/hq/wallet/adjustment-request' : endpoints[page];
+    const method = page === 'Settings' ? 'PATCH' : 'POST';
+    await run(async () => {
+      await api(endpoint, { method, body: JSON.stringify(body) });
+      setToast(`${page} saved.`);
+      setDraft((current) => ({ ...current, [page]: { ...(defaults[page] ?? {}) } }));
+      await loadAll();
     });
-    await api('/hq/growth-plays', { method: 'POST', body: JSON.stringify({ signalId: signal.id, playType: 'crib_promo', activeCampaign: 'promote_high_stake_cribs' }) });
-    setToast('Created a fresh Game Intelligence signal and Growth Play.');
-    await refresh();
   };
 
-  const approvePlay = async (playId: string) => {
-    await api(`/hq/growth-plays/${playId}/approve`, { method: 'POST' });
-    setToast('Growth Play approved.');
-    await refresh();
+  const run = async (fn: () => Promise<void>) => {
+    setError('');
+    try {
+      await fn();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Action failed');
+    }
   };
 
-  const buildDraft = async (playId: string) => {
-    await api(`/hq/growth-plays/${playId}/build-content`, { method: 'POST' });
-    setToast('Content Studio draft created.');
-    await refresh();
-  };
-
-  const dashboardCounts = useMemo(
-    () => [
-      { label: 'Players', value: users.length, tone: 'green' },
-      { label: 'Cribs', value: cribs.length, tone: 'purple' },
-      { label: 'Tables', value: tables.length, tone: 'blue' },
-      { label: 'Events', value: events.length, tone: 'gold' },
-      { label: 'Signals', value: signals.length, tone: 'orange' },
-      { label: 'Growth Plays', value: growthPlays.length, tone: 'green' }
-    ],
-    [users, cribs, tables, events, signals, growthPlays]
-  );
+  const pageRows = useMemo(() => (active === 'Settings' ? [data.Settings ?? {}] : active === 'System Health' ? health?.checks ?? [] : data[active] ?? []), [active, data, health]);
 
   if (!operator) {
     return (
       <main className="login-screen">
         <form className="login-panel" onSubmit={login}>
-          <div className="brand-lockup">
-            <Crown size={28} />
-            <div>
-              <strong>ReemTeamHQ</strong>
-              <span>Private command center</span>
-            </div>
-          </div>
+          <div className="brand-lockup"><Crown size={28} /><div><strong>ReemTeamHQ</strong><span>Private command center</span></div></div>
           <label>Email<input value={email} onChange={(event) => setEmail(event.target.value)} /></label>
           <label>Password<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>
           <button><Shield size={16} /> Sign in</button>
-          {toast ? <p className="toast">{toast}</p> : null}
+          {error ? <p className="toast">{error}</p> : null}
         </form>
       </main>
     );
@@ -192,141 +213,161 @@ function App() {
 
   return (
     <div className="app">
-      {toast ? <div className="toast toast-floating">{toast}</div> : null}
+      {toast ? <div className="toast toast-floating" onAnimationEnd={() => setToast('')}>{toast}</div> : null}
       <aside className="nav">
-        <div className="brand-lockup">
-          <Crown size={26} />
-          <div>
-            <strong>ReemTeamHQ</strong>
-            <span>{operator.role}</span>
-          </div>
-        </div>
+        <div className="brand-lockup"><Crown size={26} /><div><strong>ReemTeamHQ</strong><span>{operator.role}</span></div></div>
         <nav>
-          {hqSections.map((section, index) => {
+          {nav.map((section, index) => {
             const Icon = icons[index] ?? Sparkles;
-            return (
-              <button key={section} className={active === section ? 'active' : ''} onClick={() => setActive(section)}>
-                <Icon size={17} />
-                {section}
-              </button>
-            );
+            const count = Array.isArray(data[section]) ? data[section].length : section === 'System Health' ? health?.checks.length ?? 0 : undefined;
+            return <button key={section} className={active === section ? 'active' : ''} onClick={() => { setActive(section); setSelected(null); }}><Icon size={17} />{section}{count != null ? <small>{count}</small> : null}</button>;
           })}
         </nav>
         <button className="logout" onClick={logout}><LogOut size={16} /> Sign out</button>
       </aside>
-
       <main className="workspace">
         <header className="topbar">
-          <div>
-            <span className="eyebrow">Command center</span>
-            <h1>{active}</h1>
-            <p>{commandCenter?.sentence ?? 'ReemTeamHQ turns activity into sharper operations and growth moves.'}</p>
-          </div>
+          <div><span className="eyebrow">ReemTeamHQ</span><h1>{active}</h1><p>{commandCenter?.sentence ?? 'Run ReemTeam from one private command center.'}</p></div>
           <div className="topbar-actions">
-            <button onClick={() => void refresh()}><RefreshCw size={16} /> Refresh</button>
-            <button className="primary" onClick={() => void createSeedSignal()}><Sparkles size={16} /> Create signal</button>
+            <button onClick={() => void loadAll()}><RefreshCw size={16} /> Refresh</button>
+            <button className="primary" onClick={() => void run(async () => { await api('/hq/game-intelligence/run', { method: 'POST' }); setToast('Intelligence run complete.'); await loadAll(); })}><Sparkles size={16} /> Run intelligence</button>
           </div>
         </header>
-
-        {active === 'Command Center' ? (
-          <>
-            <section className="metric-grid">
-              {(commandCenter?.metrics ?? dashboardCounts).map((metric) => <MetricCard key={metric.label} metric={metric} />)}
-            </section>
-            <section className="split">
-              <Panel title="Today’s Recommended Actions" icon={<Flame size={18} />}>
-                <PlayList plays={growthPlays.slice(0, 5)} onApprove={approvePlay} onBuild={buildDraft} />
-              </Panel>
-              <Panel title="Urgent Admin Alerts" icon={<AlertTriangle size={18} />}>
-                <PlayList plays={growthPlays.filter((play) => ['high', 'critical'].includes(play.urgency))} onApprove={approvePlay} onBuild={buildDraft} />
-              </Panel>
-            </section>
-          </>
-        ) : null}
-
-        {active === 'Players' ? <Rows title="Players / CRM" rows={users} fields={['displayName', 'username', 'role', 'status', 'tags', 'gamesPlayed', 'wins', 'reems']} /> : null}
-        {active === 'Tables' ? <Rows title="Tables" rows={tables} fields={['tableName', 'stake', 'maxSeats', 'status', 'visibility', 'priority']} /> : null}
-        {active === 'Cribs' ? <Rows title="Cribs" rows={cribs} fields={['cribName', 'stakeTier', 'status', 'featured', 'growthPriority', 'description']} /> : null}
-        {active === 'Events' ? <Rows title="Events" rows={events} fields={['eventName', 'eventType', 'status', 'startTime', 'endTime', 'growthGoal']} /> : null}
-        {active === 'Game Intelligence' ? <Rows title="Game Intelligence Signals" rows={signals} fields={['signalType', 'title', 'severity', 'confidence', 'visibilitySafe', 'occurredAt']} /> : null}
-        {active === 'Growth Plays' ? <Panel title="Growth Plays Dashboard" icon={<Flame size={18} />}><PlayList plays={growthPlays} onApprove={approvePlay} onBuild={buildDraft} /></Panel> : null}
-        {active === 'Content Studio' ? <Rows title="Content Studio Drafts" rows={drafts} fields={['title', 'format', 'channel', 'caption', 'status']} /> : null}
-        {active === 'System Health' ? <Rows title="System Health" rows={health?.checks ?? []} fields={['component', 'status', 'detail']} /> : null}
-        {!['Command Center', 'Players', 'Tables', 'Cribs', 'Events', 'Game Intelligence', 'Growth Plays', 'Content Studio', 'System Health'].includes(active) ? (
-          <Panel title={active} icon={<ClipboardList size={18} />}>
-            <div className="empty">This module has a clean route and product slot. The next pass fills its operator workflows without old RGE code.</div>
-          </Panel>
+        {error ? <div className="error-state">{error}</div> : null}
+        {loading ? <div className="empty">Loading live HQ data...</div> : null}
+        {active === 'Command Center' ? <CommandCenterView commandCenter={commandCenter} growthPlays={data['Growth Plays'] ?? []} health={health} run={run} loadAll={loadAll} /> : null}
+        {active !== 'Command Center' ? (
+          <Page
+            title={active}
+            rows={pageRows}
+            fields={fields[active] ?? []}
+            draft={draft[active] ?? {}}
+            setDraft={(value) => setDraft((current) => ({ ...current, [active]: value }))}
+            onSubmit={() => submit(active)}
+            selected={selected}
+            setSelected={setSelected}
+            run={run}
+            loadAll={loadAll}
+          />
         ) : null}
       </main>
     </div>
   );
 }
 
-function MetricCard({ metric }: { metric: Metric }) {
+function normalizePayload(input: AnyRow) {
+  const output: AnyRow = {};
+  for (const [key, value] of Object.entries(input)) {
+    if (value === '') continue;
+    if (Array.isArray(value)) output[key] = value;
+    else if (typeof value === 'string' && value.includes(',') && ['tags', 'approvedChannels', 'approvedFormats', 'notes', 'abuseFlags'].includes(key)) output[key] = value.split(',').map((part) => part.trim()).filter(Boolean);
+    else if (['stake', 'maxSeats', 'priority', 'growthPriority', 'confidence', 'rewardAmount', 'amount', 'value'].includes(key)) output[key] = Number(value);
+    else if (['featured', 'eventEligible', 'visibilitySafe'].includes(key)) output[key] = value === true || value === 'true';
+    else output[key] = value;
+  }
+  return output;
+}
+
+function CommandCenterView({ commandCenter, growthPlays, health, run, loadAll }: { commandCenter: CommandCenter | null; growthPlays: AnyRow[]; health: Health | null; run: (fn: () => Promise<void>) => Promise<void>; loadAll: () => Promise<void> }) {
   return (
-    <article className={`metric metric-${metric.tone}`}>
-      <span>{metric.label}</span>
-      <strong>{metric.value}</strong>
-    </article>
+    <>
+      <section className="metric-grid">{(commandCenter?.metrics ?? []).map((metric) => <MetricCard key={metric.label} metric={metric} />)}</section>
+      <section className="split">
+        <Panel title="Recommended Actions" icon={<Flame size={18} />}>
+          <PlayList plays={growthPlays.slice(0, 6)} run={run} loadAll={loadAll} />
+        </Panel>
+        <Panel title="System Health" icon={<AlertTriangle size={18} />}>
+          <Rows rows={health?.checks ?? []} fields={['component', 'status', 'detail']} onSelect={() => undefined} />
+        </Panel>
+      </section>
+    </>
   );
 }
 
-function Panel({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) {
+function Page(input: {
+  title: string;
+  rows: AnyRow[];
+  fields: string[];
+  draft: AnyRow;
+  setDraft: (value: AnyRow) => void;
+  onSubmit: () => Promise<void>;
+  selected: AnyRow | null;
+  setSelected: (row: AnyRow | null) => void;
+  run: (fn: () => Promise<void>) => Promise<void>;
+  loadAll: () => Promise<void>;
+}) {
+  const canCreate = Boolean(defaults[input.title]);
   return (
-    <section className="panel">
-      <div className="panel-header">{icon}<h2>{title}</h2></div>
-      {children}
+    <section className="page-grid">
+      <Panel title={`${input.title} Records`} icon={<ClipboardList size={18} />}>
+        <Rows rows={input.rows} fields={input.fields} onSelect={input.setSelected} />
+        {!input.rows.length ? <div className="empty">No {input.title.toLowerCase()} records yet. Use the form to create one or run the seed script.</div> : null}
+      </Panel>
+      <aside className="side-panel">
+        {canCreate ? <Editor page={input.title} value={input.draft} setValue={input.setDraft} onSubmit={input.onSubmit} /> : null}
+        {input.selected ? <Detail page={input.title} row={input.selected} run={input.run} loadAll={input.loadAll} /> : null}
+      </aside>
     </section>
   );
 }
 
-function PlayList({ plays, onApprove, onBuild }: { plays: GrowthPlay[]; onApprove: (id: string) => Promise<void>; onBuild: (id: string) => Promise<void> }) {
-  if (!plays.length) return <div className="empty">No Growth Plays yet. Create a signal to let HQ recommend a move.</div>;
+function Editor({ page, value, setValue, onSubmit }: { page: string; value: AnyRow; setValue: (value: AnyRow) => void; onSubmit: () => Promise<void> }) {
   return (
-    <div className="play-list">
-      {plays.map((play) => (
-        <article className="play-card" key={play.id}>
-          <div className="play-card-top">
-            <span>{play.playType}</span>
-            <span>{play.urgency}</span>
-            <strong>{Math.round(play.finalScore)}</strong>
-          </div>
-          <h3>{play.title}</h3>
-          <p>{play.whyItMatters}</p>
-          <div className="why-box">
-            <strong>Why this?</strong>
-            <span>{play.whyThis?.campaignFit ?? 'HQ ranked this from current signals.'}</span>
-          </div>
-          <div className="row-actions">
-            <button onClick={() => void onApprove(play.id)}><CheckCircle2 size={15} /> Approve</button>
-            <button className="primary" onClick={() => void onBuild(play.id)}><Megaphone size={15} /> Build content</button>
-          </div>
-        </article>
+    <form className="panel form-panel" onSubmit={(event) => { event.preventDefault(); void onSubmit(); }}>
+      <div className="panel-header"><Sparkles size={18} /><h2>{page === 'Wallet/Ops' ? 'Request Adjustment' : page === 'Analytics' ? 'Record Result' : page === 'Settings' ? 'Save Settings' : `Create ${page}`}</h2></div>
+      {Object.entries(value).map(([key, fieldValue]) => (
+        <label key={key}>{key}<input value={Array.isArray(fieldValue) ? fieldValue.join(', ') : String(fieldValue ?? '')} onChange={(event) => setValue({ ...value, [key]: event.target.value })} /></label>
       ))}
-    </div>
+      <button className="primary"><CheckCircle2 size={16} /> Save</button>
+    </form>
   );
 }
 
-function Rows({ title, rows, fields }: { title: string; rows: Array<Record<string, any>>; fields: string[] }) {
+function Detail({ page, row, run, loadAll }: { page: string; row: AnyRow; run: (fn: () => Promise<void>) => Promise<void>; loadAll: () => Promise<void> }) {
+  const endpoint = endpoints[page];
+  const action = async (path: string, method = 'POST', body?: AnyRow) => {
+    await run(async () => {
+      await api(path, { method, body: body ? JSON.stringify(body) : undefined });
+      await loadAll();
+    });
+  };
   return (
-    <Panel title={title} icon={<ClipboardList size={18} />}>
-      <div className="table-wrap">
-        <table>
-          <thead>
-            <tr>{fields.map((field) => <th key={field}>{field}</th>)}</tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.id ?? JSON.stringify(row)}>
-                {fields.map((field) => <td key={field}>{Array.isArray(row[field]) ? row[field].join(', ') : String(row[field] ?? '')}</td>)}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+    <Panel title="Selected Detail" icon={<Activity size={18} />}>
+      <pre className="detail-json">{JSON.stringify(row, null, 2)}</pre>
+      <div className="row-actions">
+        {page === 'Tables' ? <><button onClick={() => void action(`${endpoint}/${row.id}/pause`)}>Pause</button><button onClick={() => void action(`${endpoint}/${row.id}/feature`)}>Feature</button></> : null}
+        {page === 'Cribs' ? <button onClick={() => void action(`${endpoint}/${row.id}/feature`)}>Feature</button> : null}
+        {page === 'Events' ? <><button onClick={() => void action(`${endpoint}/${row.id}/start`)}>Start</button><button onClick={() => void action(`${endpoint}/${row.id}/pause`)}>Pause</button><button onClick={() => void action(`${endpoint}/${row.id}/end`)}>End</button></> : null}
+        {page === 'Campaigns' ? <><button onClick={() => void action(`${endpoint}/${row.id}/activate`)}>Activate</button><button onClick={() => void action(`${endpoint}/${row.id}/deactivate`)}>Deactivate</button></> : null}
+        {page === 'Growth Plays' ? <><button onClick={() => void action(`${endpoint}/${row.id}/approve`)}>Approve</button><button onClick={() => void action(`${endpoint}/${row.id}/dismiss`)}>Dismiss</button><button className="primary" onClick={() => void action(`${endpoint}/${row.id}/build-content`)}>Build Content</button></> : null}
+        {page === 'Content Studio' ? <><button onClick={() => void action(`${endpoint}/${row.id}/approve`)}>Approve</button><button onClick={() => void action(`${endpoint}/${row.id}/schedule`, 'POST', { scheduledFor: localDate(2) })}>Schedule</button><button className="primary" onClick={() => void action(`${endpoint}/${row.id}/publish-now`)}>Publish Now</button></> : null}
+        {page === 'Support' ? <button className="primary" onClick={() => void action(`${endpoint}/${row.id}/resolve`)}>Resolve</button> : null}
       </div>
-      {!rows.length ? <div className="empty">No records yet.</div> : null}
     </Panel>
   );
+}
+
+function MetricCard({ metric }: { metric: AnyRow }) {
+  return <article className={`metric metric-${metric.tone ?? 'blue'}`}><span>{metric.label}</span><strong>{String(metric.value)}</strong></article>;
+}
+
+function Panel({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) {
+  return <section className="panel"><div className="panel-header">{icon}<h2>{title}</h2></div>{children}</section>;
+}
+
+function PlayList({ plays, run, loadAll }: { plays: AnyRow[]; run: (fn: () => Promise<void>) => Promise<void>; loadAll: () => Promise<void> }) {
+  if (!plays.length) return <div className="empty">No Growth Plays yet. Run intelligence or create Game Intelligence signals.</div>;
+  return <div className="play-list">{plays.map((play) => <article className="play-card" key={play.id}><div className="play-card-top"><span>{play.playType}</span><span>{play.urgency}</span><strong>{Math.round(play.finalScore ?? 0)}</strong></div><h3>{play.title}</h3><p>{play.whyItMatters}</p><div className="why-box"><strong>Why this?</strong><span>{play.whyThis?.campaignFit ?? 'HQ ranked this from current signals.'}</span></div><div className="row-actions"><button onClick={() => void run(async () => { await api(`/hq/growth-plays/${play.id}/approve`, { method: 'POST' }); await loadAll(); })}>Approve</button><button className="primary" onClick={() => void run(async () => { await api(`/hq/growth-plays/${play.id}/build-content`, { method: 'POST' }); await loadAll(); })}>Build content</button></div></article>)}</div>;
+}
+
+function Rows({ rows, fields, onSelect }: { rows: AnyRow[]; fields: string[]; onSelect: (row: AnyRow) => void }) {
+  return <div className="table-wrap"><table><thead><tr>{fields.map((field) => <th key={field}>{field}</th>)}</tr></thead><tbody>{rows.map((row) => <tr key={row.id ?? JSON.stringify(row)} onClick={() => onSelect(row)}>{fields.map((field) => <td key={field}>{formatCell(row[field])}</td>)}</tr>)}</tbody></table></div>;
+}
+
+function formatCell(value: unknown) {
+  if (Array.isArray(value)) return value.join(', ');
+  if (value && typeof value === 'object') return JSON.stringify(value);
+  return String(value ?? '');
 }
 
 createRoot(document.getElementById('root')!).render(<App />);

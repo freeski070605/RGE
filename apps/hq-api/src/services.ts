@@ -4,15 +4,20 @@ import { Operator } from './auth.js';
 import { logAdminAction } from './audit.js';
 import {
   AdminActionLog,
+  AdminNote,
   Campaign,
   ContentDraft,
   Crib,
   Event,
   GameIntelligenceSignal,
   GrowthPlay,
+  HQSetting,
+  PerformanceResult,
+  Referral,
   SupportIssue,
   Table,
   User,
+  UserProfile,
   WalletLedger
 } from './models.js';
 import { getDatabaseStatus, isDatabaseConnected } from './db.js';
@@ -159,6 +164,13 @@ export const getSystemHealth = async () => {
 export const createGrowthPlayFromSignal = async (actor: Operator, signalId: string, input: Partial<{ playType: GrowthPlayType; activeCampaign: CampaignType }>) => {
   const signal = await GameIntelligenceSignal.findById(signalId);
   if (!signal) throw new Error('Signal not found');
+  const duplicate = await GrowthPlay.findOne({ sourceSignalIds: signal._id }).lean();
+  if (duplicate) return serialize(duplicate);
+  const similarCount = await GrowthPlay.countDocuments({
+    playType: input.playType ?? inferPlayType(signal.signalType as SignalType),
+    createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }
+  });
+  const activeCampaign = input.activeCampaign ?? (await Campaign.findOne({ status: 'active' }).sort({ priority: -1 }).lean())?.campaignType;
   const playType = input.playType ?? inferPlayType(signal.signalType as SignalType);
   const score = scoreGrowthPlay({
     playType,
@@ -166,14 +178,15 @@ export const createGrowthPlayFromSignal = async (actor: Operator, signalId: stri
     confidence: signal.confidence,
     occurredAt: signal.occurredAt,
     visibilitySafe: signal.visibilitySafe,
-    activeCampaign: input.activeCampaign,
+    activeCampaign: activeCampaign as CampaignType | undefined,
+    recentSimilarCount: similarCount,
     hasRiskFlags: signal.signalType === 'suspicious_activity_detected'
   });
   const recommendedAction = recommendedActionFor(playType);
   const whyThis = explainGrowthPlay({
     signalTitles: [signal.title],
     scoreParts: score.scoreParts,
-    activeCampaign: input.activeCampaign,
+    activeCampaign: activeCampaign as CampaignType | undefined,
     recommendedAction,
     visibilitySafe: signal.visibilitySafe,
     riskFlags: signal.signalType === 'suspicious_activity_detected' ? ['suspicious_activity'] : []
@@ -210,6 +223,22 @@ export const createGrowthPlayFromSignal = async (actor: Operator, signalId: stri
     metadata: { signalId }
   });
   return serialize(play);
+};
+
+export const generateGrowthPlaysFromSignals = async (actor: Operator) => {
+  const signals = await GameIntelligenceSignal.find({ status: { $in: ['new', 'ranked'] } }).sort({ occurredAt: -1 }).limit(50);
+  const created = [];
+  for (const signal of signals) {
+    created.push(await createGrowthPlayFromSignal(actor, id(signal._id), {}));
+  }
+  await logAdminAction(actor, {
+    actionType: 'intelligence_run',
+    targetType: 'game_intelligence',
+    targetId: 'signals',
+    description: `Generated ${created.length} Growth Plays from current signals.`,
+    metadata: { signalCount: signals.length }
+  });
+  return created;
 };
 
 export const buildContentDraft = async (actor: Operator, growthPlayId: string) => {
@@ -254,6 +283,25 @@ export const dashboardCollections = {
   wallet: WalletLedger,
   support: SupportIssue,
   adminActions: AdminActionLog
+};
+
+export const hqModels = {
+  AdminActionLog,
+  AdminNote,
+  Campaign,
+  ContentDraft,
+  Crib,
+  Event,
+  GameIntelligenceSignal,
+  GrowthPlay,
+  HQSetting,
+  PerformanceResult,
+  Referral,
+  SupportIssue,
+  Table,
+  User,
+  UserProfile,
+  WalletLedger
 };
 
 const inferPlayType = (signalType: SignalType): GrowthPlayType => {

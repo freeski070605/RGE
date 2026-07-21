@@ -110,6 +110,20 @@ test('ReemTeamHQ CRUD, Growth Plays, Content Studio, and audit log are clean-sla
     });
     assert.equal(event.status, 201);
 
+    const campaign = await api('/api/hq/campaigns', {
+      method: 'POST',
+      body: {
+        campaignName: 'Friday Night Reem Push',
+        campaignType: 'promote_friday_night_reem',
+        description: 'Boost the hottest crib before the event.',
+        priority: 91,
+        status: 'draft'
+      }
+    });
+    assert.equal(campaign.status, 201);
+    const activatedCampaign = await api(`/api/hq/campaigns/${campaign.payload.id}/activate`, { method: 'POST' });
+    assert.equal(activatedCampaign.payload.status, 'active');
+
     const signal = await api('/api/hq/game-intelligence/signals', {
       method: 'POST',
       body: {
@@ -149,6 +163,100 @@ test('ReemTeamHQ CRUD, Growth Plays, Content Studio, and audit log are clean-sla
     assert.equal(draft.status, 201);
     assert.equal(draft.payload.status, 'needs_review');
 
+    const scheduledDraft = await api(`/api/hq/content-drafts/${draft.payload.id}/schedule`, {
+      method: 'POST',
+      body: { scheduledFor: new Date(Date.now() + 7_200_000).toISOString() }
+    });
+    assert.equal(scheduledDraft.payload.status, 'scheduled');
+    const publishedDraft = await api(`/api/hq/content-drafts/${draft.payload.id}/publish-now`, { method: 'POST' });
+    assert.equal(publishedDraft.payload.status, 'published');
+    assert.ok(publishedDraft.payload.publishedAt);
+
+    const referral = await api('/api/hq/referrals', {
+      method: 'POST',
+      body: {
+        ownerUserId: user.payload.id,
+        code: 'MAYA50',
+        status: 'converted',
+        rewardAmount: 50
+      }
+    });
+    assert.equal(referral.status, 201);
+    const referralSummary = await api('/api/hq/referrals/summary');
+    assert.equal(referralSummary.payload.converted, 1);
+
+    const wallet = await api('/api/hq/wallet/adjustment-request', {
+      method: 'POST',
+      body: {
+        userId: user.payload.id,
+        amount: 25,
+        reason: 'Referral reward approval'
+      }
+    });
+    assert.equal(wallet.status, 201);
+    assert.equal(wallet.payload.type, 'adjustment');
+
+    const issue = await api('/api/hq/support', {
+      method: 'POST',
+      body: {
+        userId: user.payload.id,
+        title: 'Verify payout screenshot',
+        severity: 'medium',
+        notes: ['Player submitted receipt.']
+      }
+    });
+    assert.equal(issue.status, 201);
+    const resolvedIssue = await api(`/api/hq/support/${issue.payload.id}/resolve`, { method: 'POST' });
+    assert.equal(resolvedIssue.payload.status, 'resolved');
+
+    const result = await api('/api/hq/analytics/performance-results', {
+      method: 'POST',
+      body: {
+        contentDraftId: draft.payload.id,
+        growthPlayId: play.payload.id,
+        campaignId: campaign.payload.id,
+        channel: 'Content Studio',
+        format: 'IG Story',
+        metric: 'table_joins',
+        value: 17,
+        learning: 'Reem highlight drove table joins from VIP-adjacent players.'
+      }
+    });
+    assert.equal(result.status, 201);
+    const analytics = await api('/api/hq/analytics');
+    assert.equal(analytics.payload.totals.value, 17);
+    const whatWorked = await api('/api/hq/analytics/what-worked');
+    assert.equal(whatWorked.payload.learnings.includes('Reem highlight drove table joins from VIP-adjacent players.'), true);
+
+    const settings = await api('/api/hq/settings', {
+      method: 'PATCH',
+      body: {
+        automationMode: 'assisted',
+        approvedChannels: ['Content Studio'],
+        approvedFormats: ['IG Story'],
+        activeCampaign: campaign.payload.id
+      }
+    });
+    assert.equal(settings.payload.activeCampaign, campaign.payload.id);
+
+    const secondSignal = await api('/api/hq/game-intelligence/signals', {
+      method: 'POST',
+      body: {
+        signalType: 'hot_table_detected',
+        sourceType: 'gameplay',
+        sourceId: 'round-2',
+        tableId: table.payload.id,
+        cribId: crib.payload.id,
+        title: 'Back Room 1 needs one more seat',
+        description: 'Table heat is rising and one seat is open.',
+        severity: 'medium',
+        confidence: 81
+      }
+    });
+    assert.equal(secondSignal.status, 201);
+    const generated = await api('/api/hq/growth-plays/generate-from-signals', { method: 'POST' });
+    assert.equal(generated.payload.generated.length, 1);
+
     const command = await api('/api/hq/command-center');
     assert.equal(command.status, 200);
     assert.equal(command.payload.product, 'ReemTeamHQ');
@@ -157,6 +265,9 @@ test('ReemTeamHQ CRUD, Growth Plays, Content Studio, and audit log are clean-sla
     assert.equal(actions.some((action) => action.actionType === 'user_created'), true);
     assert.equal(actions.some((action) => action.actionType === 'growth_play_created'), true);
     assert.equal(actions.some((action) => action.actionType === 'content_created'), true);
+    assert.equal(actions.some((action) => action.actionType === 'campaign_activated'), true);
+    assert.equal(actions.some((action) => action.actionType === 'support_issue_resolved'), true);
+    assert.equal(actions.some((action) => action.actionType === 'settings_changed'), true);
   } finally {
     if (server) {
       await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));

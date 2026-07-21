@@ -59,6 +59,32 @@ const UserSchema = new Schema(
   { timestamps: true, collection: 'users' }
 );
 
+const UserProfileSchema = new Schema(
+  {
+    userId: { type: objectId, ref: 'User', required: true, unique: true, index: true },
+    displayName: { type: String, required: true },
+    contact: {
+      email: String,
+      phone: String
+    },
+    tags: { type: [String], enum: playerTags, default: [], index: true },
+    summary: { type: Schema.Types.Mixed, default: {} },
+    riskFlags: { type: [String], default: [] },
+    contentSafe: { type: Boolean, default: true }
+  },
+  { timestamps: true, collection: 'user_profiles' }
+);
+
+const AdminNoteSchema = new Schema(
+  {
+    userId: { type: objectId, ref: 'User', required: true, index: true },
+    actorId: { type: String, index: true },
+    note: { type: String, required: true },
+    visibility: { type: String, enum: ['internal', 'owner_only'], default: 'internal' }
+  },
+  { timestamps: true, collection: 'admin_notes' }
+);
+
 const CribSchema = new Schema(
   {
     cribName: { type: String, required: true, trim: true, unique: true },
@@ -179,7 +205,7 @@ const CampaignSchema = new Schema(
 
 const ContentDraftSchema = new Schema(
   {
-    growthPlayId: { type: objectId, ref: 'GrowthPlay', required: true },
+    growthPlayId: { type: objectId, ref: 'GrowthPlay' },
     title: { type: String, required: true },
     format: { type: String, required: true },
     channel: { type: String, required: true },
@@ -189,7 +215,7 @@ const ContentDraftSchema = new Schema(
     cta: { type: String, default: '' },
     selectedAssets: { type: [String], default: [] },
     previewUrl: String,
-    status: { type: String, enum: ['draft', 'needs_review', 'approved', 'scheduled', 'published'], default: 'draft' },
+    status: { type: String, enum: ['draft', 'needs_review', 'approved', 'scheduled', 'published', 'archived'], default: 'draft' },
     scheduledFor: Date,
     publishedAt: Date,
     performanceResultId: String
@@ -208,6 +234,19 @@ const WalletLedgerSchema = new Schema(
   { timestamps: true, collection: 'wallet_ledger' }
 );
 
+const ReferralSchema = new Schema(
+  {
+    ownerUserId: { type: objectId, ref: 'User', required: true, index: true },
+    code: { type: String, required: true, unique: true, trim: true, uppercase: true },
+    invitedUserId: { type: objectId, ref: 'User' },
+    status: { type: String, enum: ['active', 'converted', 'rewarded', 'flagged'], default: 'active', index: true },
+    rewardAmount: { type: Number, default: 0 },
+    abuseFlags: { type: [String], default: [] },
+    metadata: { type: Schema.Types.Mixed, default: {} }
+  },
+  { timestamps: true, collection: 'referrals' }
+);
+
 const SupportIssueSchema = new Schema(
   {
     userId: { type: objectId, ref: 'User' },
@@ -219,11 +258,48 @@ const SupportIssueSchema = new Schema(
   { timestamps: true, collection: 'support_issues' }
 );
 
+const PerformanceResultSchema = new Schema(
+  {
+    contentDraftId: { type: objectId, ref: 'ContentDraft' },
+    growthPlayId: { type: objectId, ref: 'GrowthPlay' },
+    campaignId: { type: objectId, ref: 'Campaign' },
+    channel: { type: String, required: true },
+    format: { type: String, default: '' },
+    metric: { type: String, required: true },
+    value: { type: Number, required: true },
+    learning: { type: String, required: true },
+    metadata: { type: Schema.Types.Mixed, default: {} }
+  },
+  { timestamps: true, collection: 'performance_results' }
+);
+
+const HQSettingSchema = new Schema(
+  {
+    key: { type: String, required: true, unique: true, index: true },
+    value: { type: Schema.Types.Mixed, default: {} },
+    updatedBy: { type: String, default: '' }
+  },
+  { timestamps: true, collection: 'hq_settings' }
+);
+
+const SystemHealthCheckSchema = new Schema(
+  {
+    component: { type: String, required: true, index: true },
+    status: { type: String, enum: ['Healthy', 'Warning', 'Broken'], required: true, index: true },
+    detail: { type: String, default: '' },
+    metadata: { type: Schema.Types.Mixed, default: {} },
+    checkedAt: { type: Date, default: Date.now, index: true }
+  },
+  { timestamps: true, collection: 'system_health_checks' }
+);
+
 export type UserDocument = InferSchemaType<typeof UserSchema> & { _id: unknown };
 export type GameIntelligenceSignalDocument = InferSchemaType<typeof GameIntelligenceSignalSchema> & { _id: unknown };
 
 export const AdminActionLog = model('AdminActionLog', AdminActionLogSchema);
 export const User = model('User', UserSchema);
+export const UserProfile = model('UserProfile', UserProfileSchema);
+export const AdminNote = model('AdminNote', AdminNoteSchema);
 export const Crib = model('Crib', CribSchema);
 export const Table = model('Table', TableSchema);
 export const Event = model('Event', EventSchema);
@@ -232,4 +308,8 @@ export const GrowthPlay = model('GrowthPlay', GrowthPlaySchema);
 export const Campaign = model('Campaign', CampaignSchema);
 export const ContentDraft = model('ContentDraft', ContentDraftSchema);
 export const WalletLedger = model('WalletLedger', WalletLedgerSchema);
+export const Referral = model('Referral', ReferralSchema);
 export const SupportIssue = model('SupportIssue', SupportIssueSchema);
+export const PerformanceResult = model('PerformanceResult', PerformanceResultSchema);
+export const HQSetting = model('HQSetting', HQSettingSchema);
+export const SystemHealthCheck = model('SystemHealthCheck', SystemHealthCheckSchema);

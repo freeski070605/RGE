@@ -54,6 +54,11 @@ input {
   padding: 12px;
 }
 
+input:focus {
+  outline: 2px solid rgba(88, 166, 255, 0.35);
+  outline-offset: 1px;
+}
+
 label {
   display: grid;
   gap: 8px;
@@ -135,6 +140,17 @@ label {
   background: #17211c;
   border-color: rgba(54, 212, 127, 0.38);
   color: #fff;
+}
+
+.nav small {
+  margin-left: auto;
+  min-width: 24px;
+  border: 1px solid #303946;
+  border-radius: 999px;
+  padding: 2px 7px;
+  color: #8ea0b6;
+  font-size: 11px;
+  text-align: center;
 }
 
 .logout {
@@ -243,10 +259,28 @@ label {
   gap: 18px;
 }
 
+.page-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
+  align-items: start;
+  gap: 18px;
+}
+
+.side-panel {
+  position: sticky;
+  top: 28px;
+  display: grid;
+  gap: 18px;
+}
+
 .panel {
   display: grid;
   gap: 16px;
   padding: 18px;
+}
+
+.form-panel {
+  align-content: start;
 }
 
 .panel-header {
@@ -343,11 +377,40 @@ td {
   color: #d7dde7;
 }
 
+tbody tr {
+  cursor: pointer;
+}
+
+tbody tr:hover {
+  background: rgba(88, 166, 255, 0.06);
+}
+
+.detail-json {
+  width: 100%;
+  max-height: 420px;
+  overflow: auto;
+  border: 1px solid #242c38;
+  border-radius: 8px;
+  background: #080b10;
+  color: #d7dde7;
+  padding: 14px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .empty {
   border: 1px dashed #303946;
   border-radius: 8px;
   color: #99a3b3;
   padding: 22px;
+}
+
+.error-state {
+  border: 1px solid rgba(255, 89, 89, 0.45);
+  border-radius: 8px;
+  background: rgba(255, 89, 89, 0.1);
+  color: #ffd1d1;
+  padding: 14px 16px;
 }
 
 .toast {
@@ -363,6 +426,18 @@ td {
   border-radius: 8px;
   background: #16130b;
   padding: 12px 14px;
+  animation: fadeout 4s ease forwards;
+}
+
+@keyframes fadeout {
+  0%,
+  80% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+  }
 }
 
 @media (max-width: 1040px) {
@@ -380,8 +455,13 @@ td {
   }
 
   .metric-grid,
-  .split {
+  .split,
+  .page-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .side-panel {
+    position: static;
   }
 }
 
@@ -401,6 +481,7 @@ td {
 
   .metric-grid,
   .split,
+  .page-grid,
   .nav nav {
     grid-template-columns: 1fr;
   }
