@@ -160,12 +160,12 @@ function App() {
 
   const dashboardCounts = useMemo(
     () => [
-      { label: 'Players', value: users.length },
-      { label: 'Cribs', value: cribs.length },
-      { label: 'Tables', value: tables.length },
-      { label: 'Events', value: events.length },
-      { label: 'Signals', value: signals.length },
-      { label: 'Growth Plays', value: growthPlays.length }
+      { label: 'Players', value: users.length, tone: 'green' },
+      { label: 'Cribs', value: cribs.length, tone: 'purple' },
+      { label: 'Tables', value: tables.length, tone: 'blue' },
+      { label: 'Events', value: events.length, tone: 'gold' },
+      { label: 'Signals', value: signals.length, tone: 'orange' },
+      { label: 'Growth Plays', value: growthPlays.length, tone: 'green' }
     ],
     [users, cribs, tables, events, signals, growthPlays]
   );
