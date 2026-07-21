@@ -276,9 +276,8 @@ export const getSystemIntegrity = async () => {
           action: `Restart ${worker.workerName} and confirm its queue connection.`
         })
       ),
-    ...(mediaDiagnostics.queue.status === 'healthy'
-      ? []
-      : [
+    ...(mediaDiagnostics.queue.status === 'down'
+      ? [
           buildIssue({
             code: 'media_queue_unavailable',
             severity: 'critical',
@@ -287,7 +286,8 @@ export const getSystemIntegrity = async () => {
             entityType: 'media_queue',
             action: 'Restore Redis and the media queue before generating new media.'
           })
-        ]),
+        ]
+      : []),
     ...(mediaDiagnostics.processing.status === 'healthy'
       ? []
       : [
