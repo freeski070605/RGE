@@ -1,8 +1,8 @@
-import { createHqApp } from './app';
+import { createApp } from './app.js';
+import { env } from './config.js';
+import { connectDatabase } from './db.js';
 
-const port = Number(process.env.PORT || 4010);
-const app = createHqApp();
-
-app.listen(port, () => {
-  console.log(`ReemTeam HQ listening on http://localhost:${port}`);
+await connectDatabase();
+createApp().listen(env.port, () => {
+  console.log(`ReemTeamHQ API listening on ${env.port}`);
 });

@@ -1,10 +1,7 @@
 node_modules
 dist
-dist-hq
 .env
-storage/generated/images
-storage/generated/videos
-storage/assets/original
-storage/assets/edited
-dashboard/node_modules
-dashboard/dist
+.env.local
+coverage
+test-output
+*.tsbuildinfo
