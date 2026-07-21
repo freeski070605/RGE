@@ -23,7 +23,7 @@ export type LegacyCollectionSummary = {
 const allowedTags = new Set<string>(playerTags);
 const adminRoles = new Set(['owner', 'admin', 'operator', 'moderator', 'support']);
 
-export const defaultPlayerSourceCollections = ['players', 'Players', 'player', 'Player', 'users', 'Users', 'user', 'User'];
+export const defaultPlayerSourceCollections = ['hq_user_profiles', 'hq_users', 'players', 'Players', 'player', 'Player', 'users', 'Users', 'user', 'User'];
 
 const sourceView = (source: AnyDoc) => ({
   ...source,
@@ -191,7 +191,11 @@ export const importExistingPlayers = async (collectionNames: string[], limit: nu
     const docs = await db.collection(collectionName).find({}).limit(limit).toArray();
 
     for (const doc of docs) {
-      const player = normalizeLegacyPlayer(doc, collectionName);
+      const userDoc =
+        collectionName === 'hq_user_profiles' && doc.userId
+          ? await db.collection('hq_users').findOne({ _id: doc.userId })
+          : null;
+      const player = normalizeLegacyPlayer(userDoc ? { ...userDoc, ...doc, user: userDoc } : doc, collectionName);
       if (!player) {
         result.skipped += 1;
         continue;

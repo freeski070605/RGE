@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { MongoMemoryServer } from 'mongodb-memory-server';
+import { ObjectId } from 'mongodb';
 
 test('existing players are imported from legacy collections into HQ users and profiles', async (t) => {
   let mongo: MongoMemoryServer | null = null;
@@ -65,6 +66,41 @@ test('existing players are imported from legacy collections into HQ users and pr
     const rerun = await importExistingPlayers(['user'], 100);
     assert.equal(rerun.imported, 0);
     assert.equal(rerun.updated, 1);
+
+    const legacyUserId = new ObjectId();
+    await mongoose.default.connection.db?.collection('hq_users').insertOne({
+      _id: legacyUserId,
+      displayName: 'HQ Existing Player',
+      username: 'hq_existing',
+      role: 'player',
+      status: 'active'
+    });
+    await mongoose.default.connection.db?.collection('hq_user_profiles').insertOne({
+      userId: legacyUserId,
+      displayName: 'HQ Existing Player',
+      gamesPlayed: 99,
+      wins: 61,
+      losses: 38,
+      reems: 7,
+      referralCount: 4,
+      averageStake: 35,
+      highestStake: 150,
+      tags: ['vip']
+    });
+
+    const hqResult = await importExistingPlayers(['hq_user_profiles', 'hq_users'], 100);
+    assert.deepEqual(hqResult.collectionsScanned, ['hq_user_profiles', 'hq_users']);
+    assert.equal(hqResult.imported, 1);
+    assert.equal(hqResult.updated, 1);
+
+    const hqUser = await User.findOne({ username: 'hq_existing' }).lean();
+    assert.equal(hqUser?.gamesPlayed, 99);
+    assert.equal(hqUser?.wins, 61);
+    assert.equal(hqUser?.highestStake, 150);
+    assert.equal(hqUser?.tags.includes('vip'), true);
+
+    const hqProfile = await UserProfile.findOne({ userId: hqUser?._id }).lean();
+    assert.equal(hqProfile?.summary.gamesPlayed, 99);
 
     await disconnectDatabase();
   } finally {

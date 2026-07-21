@@ -24,7 +24,7 @@ npm run inspect:players -w @reemteam/hq-api
 npm run seed:players -w @reemteam/hq-api
 ```
 
-`inspect:players` lists Mongo collections, document counts, and sample keys so you can find the legacy player collection. `seed:players` imports/upserts existing players into the new HQ `users` and `user_profiles` collections. By default it checks `players`, `Players`, `player`, `Player`, `users`, `Users`, `user`, and `User`. Set `MONGODB_URI` plus optional `LEGACY_MONGODB_URI`, `PLAYER_SOURCE_COLLECTIONS`, `PLAYER_IMPORT_LIMIT`, and `PLAYER_IMPORT_DRY_RUN=true` before running it.
+`inspect:players` lists Mongo collections, document counts, and sample keys so you can find the legacy player collection. `seed:players` imports/upserts existing players into the new HQ `users` and `user_profiles` collections. By default it checks `hq_user_profiles`, `hq_users`, `players`, `Players`, `player`, `Player`, `users`, `Users`, `user`, and `User`. Set `MONGODB_URI` plus optional `LEGACY_MONGODB_URI`, `PLAYER_SOURCE_COLLECTIONS`, `PLAYER_IMPORT_LIMIT`, and `PLAYER_IMPORT_DRY_RUN=true` before running it.
 
 ## Product Loop
 
