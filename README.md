@@ -20,10 +20,11 @@ npm run dev
 npm run dev:dashboard
 npm run build
 npm test
+npm run inspect:players -w @reemteam/hq-api
 npm run seed:players -w @reemteam/hq-api
 ```
 
-`seed:players` imports/upserts existing Atlas players into the new HQ `users` and `user_profiles` collections. Set `MONGODB_URI` plus optional `PLAYER_SOURCE_COLLECTIONS`, `PLAYER_IMPORT_LIMIT`, and `PLAYER_IMPORT_DRY_RUN=true` before running it.
+`inspect:players` lists Mongo collections, document counts, and sample keys so you can find the legacy player collection. `seed:players` imports/upserts existing players into the new HQ `users` and `user_profiles` collections. Set `MONGODB_URI` plus optional `LEGACY_MONGODB_URI`, `PLAYER_SOURCE_COLLECTIONS`, `PLAYER_IMPORT_LIMIT`, and `PLAYER_IMPORT_DRY_RUN=true` before running it.
 
 ## Product Loop
 

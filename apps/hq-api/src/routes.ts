@@ -137,7 +137,10 @@ const draftSchema = z.object({
   selectedAssets: z.array(z.string()).optional(),
   previewUrl: z.string().optional(),
   status: z.enum(['draft', 'needs_review', 'approved', 'scheduled', 'published', 'archived']).optional(),
-  scheduledFor: z.coerce.date().optional()
+  scheduledFor: z.coerce.date().optional(),
+  publishedDestination: z.string().optional(),
+  publishMode: z.enum(['internal_record', 'external_adapter']).optional(),
+  publishNotes: z.string().optional()
 });
 const referralSchema = z.object({ ownerUserId: z.string().min(1), code: z.string().min(2), invitedUserId: z.string().optional(), status: z.enum(['active', 'converted', 'rewarded', 'flagged']).optional(), rewardAmount: z.number().optional(), abuseFlags: z.array(z.string()).optional() });
 const walletAdjustmentSchema = z.object({ userId: z.string().min(1), amount: z.number(), reason: z.string().min(1) });
@@ -349,7 +352,17 @@ router.patch('/hq/content-drafts/:id', requireRoles(['owner', 'admin', 'operator
 router.delete('/hq/content-drafts/:id', requireRoles(['owner', 'admin']), asyncRoute(async (request: any, response: any) => archiveOne(request, response, hqModels.ContentDraft, 'content_draft')));
 router.post('/hq/content-drafts/:id/approve', requireRoles(['owner', 'admin', 'operator']), asyncRoute(async (request: any, response: any) => patchOne({ ...request, body: { status: 'approved' } }, response, hqModels.ContentDraft, draftSchema.partial(), 'content_draft', 'content_created')));
 router.post('/hq/content-drafts/:id/schedule', requireRoles(['owner', 'admin', 'operator']), asyncRoute(async (request: any, response: any) => patchOne({ ...request, body: { status: 'scheduled', scheduledFor: request.body?.scheduledFor ?? new Date(Date.now() + 3600000) } }, response, hqModels.ContentDraft, draftSchema.partial(), 'content_draft', 'content_scheduled')));
-router.post('/hq/content-drafts/:id/publish-now', requireRoles(['owner', 'admin', 'operator']), asyncRoute(async (request: any, response: any) => patchOne({ ...request, body: { status: 'published', publishedAt: new Date(), previewUrl: request.body?.previewUrl } }, response, hqModels.ContentDraft, draftSchema.partial().extend({ publishedAt: z.coerce.date().optional() }), 'content_draft', 'content_published')));
+router.post('/hq/content-drafts/:id/publish-now', requireRoles(['owner', 'admin', 'operator']), asyncRoute(async (request: any, response: any) => patchOne({
+  ...request,
+  body: {
+    status: 'published',
+    publishedAt: new Date(),
+    previewUrl: request.body?.previewUrl,
+    publishedDestination: request.body?.publishedDestination ?? request.body?.channel ?? 'Content Studio',
+    publishMode: 'internal_record',
+    publishNotes: 'Marked as published inside ReemTeamHQ. External channel adapters are not connected yet.'
+  }
+}, response, hqModels.ContentDraft, draftSchema.partial().extend({ publishedAt: z.coerce.date().optional() }), 'content_draft', 'content_published')));
 
 router.get('/hq/referrals', asyncRoute(async (_request: any, response: any) => list(hqModels.Referral, response)));
 router.post('/hq/referrals', requireRoles(['owner', 'admin', 'operator']), asyncRoute(async (request: any, response: any) => {

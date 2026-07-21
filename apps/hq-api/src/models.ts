@@ -223,6 +223,9 @@ const ContentDraftSchema = new Schema(
     status: { type: String, enum: ['draft', 'needs_review', 'approved', 'scheduled', 'published', 'archived'], default: 'draft' },
     scheduledFor: Date,
     publishedAt: Date,
+    publishedDestination: String,
+    publishMode: { type: String, enum: ['internal_record', 'external_adapter'], default: 'internal_record' },
+    publishNotes: { type: String, default: 'Marked as published inside ReemTeamHQ. External channel adapters are not connected yet.' },
     performanceResultId: String
   },
   { timestamps: true, collection: 'content_drafts' }

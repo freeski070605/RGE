@@ -11,6 +11,12 @@ export type PlayerImportResult = {
   skipped: number;
 };
 
+export type LegacyCollectionSummary = {
+  collection: string;
+  count: number;
+  sampleKeys: string[];
+};
+
 const allowedTags = new Set<string>(playerTags);
 const adminRoles = new Set(['owner', 'admin', 'operator', 'moderator', 'support']);
 
@@ -130,8 +136,26 @@ const uniqueUsername = async (base: string, existingId?: unknown) => {
   return candidate;
 };
 
-export const importExistingPlayers = async (collectionNames: string[], limit: number, dryRun = false): Promise<PlayerImportResult> => {
-  const db = mongoose.connection.db;
+export const inspectLegacyCollections = async (db = mongoose.connection.db): Promise<LegacyCollectionSummary[]> => {
+  if (!db) throw new Error('MongoDB is not connected.');
+
+  const collections = await db.listCollections().toArray();
+  const summaries: LegacyCollectionSummary[] = [];
+  for (const collection of collections) {
+    const [count, sample] = await Promise.all([
+      db.collection(collection.name).estimatedDocumentCount(),
+      db.collection(collection.name).findOne({})
+    ]);
+    summaries.push({
+      collection: collection.name,
+      count,
+      sampleKeys: sample ? Object.keys(sample).sort() : []
+    });
+  }
+  return summaries.sort((left, right) => right.count - left.count);
+};
+
+export const importExistingPlayers = async (collectionNames: string[], limit: number, dryRun = false, db = mongoose.connection.db): Promise<PlayerImportResult> => {
   if (!db) throw new Error('MongoDB is not connected.');
 
   const availableCollections = new Set((await db.listCollections().toArray()).map((collection) => collection.name));
