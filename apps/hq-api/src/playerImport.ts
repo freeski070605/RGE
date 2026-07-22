@@ -34,8 +34,7 @@ const sourceView = (source: AnyDoc) => ({
   ...(source.profile && typeof source.profile === 'object' ? source.profile : {}),
   ...(source.stats && typeof source.stats === 'object' ? source.stats : {}),
   ...(source.wallet && typeof source.wallet === 'object' ? source.wallet : {}),
-  ...(source.walletSummary && typeof source.walletSummary === 'object' ? source.walletSummary : {}),
-  ...(source.dailyStats && typeof source.dailyStats === 'object' ? source.dailyStats : {})
+  ...(source.walletSummary && typeof source.walletSummary === 'object' ? source.walletSummary : {})
 });
 
 const firstString = (source: AnyDoc, keys: string[]) => {
@@ -53,6 +52,12 @@ const numberValue = (source: AnyDoc, keys: string[], fallback = 0) => {
     if (Number.isFinite(parsed)) return parsed;
   }
   return fallback;
+};
+
+const positiveNumberValue = (primary: AnyDoc, primaryKeys: string[], fallback: AnyDoc, fallbackKeys = primaryKeys) => {
+  const primaryValue = numberValue(primary, primaryKeys);
+  if (primaryValue > 0) return primaryValue;
+  return numberValue(fallback, fallbackKeys);
 };
 
 const dateValue = (source: AnyDoc, keys: string[]) => {
@@ -188,6 +193,7 @@ const rawTags = (source: AnyDoc) => {
 
 export const normalizeLegacyPlayer = (source: AnyDoc, sourceCollection: string) => {
   const view = sourceView(source);
+  const daily = source.dailyStats && typeof source.dailyStats === 'object' ? source.dailyStats : {};
   const sourceId = String(source._id ?? view._id ?? view.id ?? view.userId ?? '');
   const role = String(view.role ?? view.accountType ?? view.type ?? '').toLowerCase();
   if (!sourceId || adminRoles.has(role)) return null;
@@ -201,11 +207,11 @@ export const normalizeLegacyPlayer = (source: AnyDoc, sourceCollection: string) 
     phone ||
     `Player ${sourceId.slice(-6)}`;
   const username = cleanUsername(firstString(view, ['username', 'userName', 'handle', 'slug']) || displayName, `player_${sourceId.slice(-8).toLowerCase()}`);
-  const wins = numberValue(view, ['wins', 'winCount']);
-  const losses = numberValue(view, ['losses', 'lossCount']);
-  const gamesPlayed = numberValue(view, ['gamesPlayed', 'gameCount', 'games', 'totalGames'], wins + losses);
+  const wins = positiveNumberValue(view, ['wins', 'winCount'], daily, ['wins']);
+  const losses = positiveNumberValue(view, ['losses', 'lossCount'], daily, ['losses']);
+  const gamesPlayed = positiveNumberValue(view, ['gamesPlayed', 'gameCount', 'games', 'totalGames'], daily, ['gamesPlayed']);
   const riskFlags = Array.isArray(view.riskFlags) ? view.riskFlags.map(String) : [];
-  const rtcBalance = numberValue(view, ['rtcBalance', 'rtc', 'rtcCredits', 'credits', 'balance', 'walletBalance']);
+  const rtcBalance = positiveNumberValue(view, ['rtcBalance', 'rtc', 'rtcCredits', 'credits', 'balance', 'walletBalance'], daily, ['rtcBalance']);
 
   const status = String(view.status ?? '').toLowerCase() === 'suspended' ? 'suspended' : boolValue(view.disabled) ? 'disabled' : 'active';
 
@@ -217,21 +223,21 @@ export const normalizeLegacyPlayer = (source: AnyDoc, sourceCollection: string) 
     role: 'player' as const,
     status: status as 'active' | 'disabled' | 'suspended',
     tags: rawTags(view),
-    lastActiveAt: dateValue(view, ['lastActiveAt', 'lastLoginAt', 'updatedAt']),
+    lastActiveAt: dateValue(view, ['lastActiveAt', 'lastLoginAt', 'updatedAt']) ?? daily.lastActiveAt,
     favoriteCrib: firstString(view, ['favoriteCrib', 'cribName']) || undefined,
-    averageStake: numberValue(view, ['averageStake', 'avgStake']),
-    highestStake: numberValue(view, ['highestStake', 'maxStake', 'biggestStake']),
+    averageStake: positiveNumberValue(view, ['averageStake', 'avgStake'], daily, ['averageStake']),
+    highestStake: positiveNumberValue(view, ['highestStake', 'maxStake', 'biggestStake'], daily, ['highestStake']),
     gamesPlayed,
     wins,
     losses,
-    reems: numberValue(view, ['reems', 'reemCount']),
+    reems: positiveNumberValue(view, ['reems', 'reemCount'], daily, ['reems']),
     drops: numberValue(view, ['drops', 'dropCount']),
-    caughtDrops: numberValue(view, ['caughtDrops', 'caughtDropCount']),
-    referrals: numberValue(view, ['referrals', 'referralCount']),
+    caughtDrops: positiveNumberValue(view, ['caughtDrops', 'caughtDropCount'], daily, ['caughtDrops']),
+    referrals: positiveNumberValue(view, ['referrals', 'referralCount'], daily, ['referrals']),
     rtcBalance,
     walletSummary: {
       credits: rtcBalance,
-      winnings: numberValue(view, ['winnings', 'totalWinnings']),
+      winnings: positiveNumberValue(view, ['winnings', 'totalWinnings'], daily, ['winnings']),
       promotionalCredits: numberValue(view, ['promotionalCredits', 'promoCredits']),
       referralCredits: numberValue(view, ['referralCredits', 'rewardedInvites'])
     },
@@ -292,7 +298,10 @@ export const autoImportExistingPlayersIfNeeded = async (limit = 10000, db = mong
           { rtcBalance: { $lte: 0 } },
           { rtcBalance: { $exists: false } },
           { 'walletSummary.credits': { $lte: 0 } },
-          { 'walletSummary.credits': { $exists: false } }
+          { 'walletSummary.credits': { $exists: false } },
+          { gamesPlayed: { $lte: 0 } },
+          { wins: { $lte: 0 } },
+          { reems: { $lte: 0 } }
         ]
       })
     ]);
