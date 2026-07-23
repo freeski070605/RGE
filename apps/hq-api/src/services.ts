@@ -1,5 +1,6 @@
 import { explainGrowthPlay, scoreGrowthPlay } from '@reemteam/intelligence';
 import { CampaignType, GrowthPlayType, SignalType } from '@reemteam/shared';
+import mongoose from 'mongoose';
 import { Operator } from './auth.js';
 import { logAdminAction } from './audit.js';
 import {
@@ -80,17 +81,25 @@ export const getCommandCenter = async () => {
     };
   }
 
+  const db = mongoose.connection.db;
+  if (!db) throw new Error('MongoDB is not connected.');
+  const collections = new Set((await db.listCollections().toArray()).map((collection) => collection.name));
+  const useOriginalPlayers = collections.has('hq_users');
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const [activePlayersToday, gamesPlayedToday, tablesActiveNow, hottestCrib, latestReem, biggestPayout, topPlayer, growthPlays, supportIssues] =
     await Promise.all([
-      User.countDocuments({ lastActiveAt: { $gte: today } }),
+      useOriginalPlayers && collections.has('hq_user_profiles') ? db.collection('hq_user_profiles').countDocuments({ lastActiveAt: { $gte: today } }) : User.countDocuments({ lastActiveAt: { $gte: today } }),
       GameIntelligenceSignal.countDocuments({ sourceType: 'gameplay', occurredAt: { $gte: today } }),
       Table.countDocuments({ status: 'active' }),
       Crib.findOne({ status: 'active' }).sort({ growthPriority: -1 }).lean(),
       GameIntelligenceSignal.findOne({ signalType: 'reem_detected' }).sort({ occurredAt: -1 }).lean(),
       GameIntelligenceSignal.findOne({ signalType: 'big_payout_detected' }).sort({ 'metadata.amount': -1 }).lean(),
-      User.findOne().sort({ wins: -1, reems: -1 }).lean(),
+      useOriginalPlayers && collections.has('player_stats_daily')
+        ? db.collection('player_stats_daily').findOne({}, { sort: { wins: -1, reems: -1 } })
+        : useOriginalPlayers && collections.has('hq_user_profiles')
+          ? db.collection('hq_user_profiles').findOne({}, { sort: { wins: -1, reems: -1 } })
+          : User.findOne().sort({ wins: -1, reems: -1 }).lean(),
       GrowthPlay.find({ status: 'open' }).sort({ finalScore: -1 }).limit(5).lean(),
       SupportIssue.countDocuments({ status: 'open' })
     ]);
@@ -106,7 +115,7 @@ export const getCommandCenter = async () => {
       { label: 'Hottest crib', value: hottestCrib?.cribName ?? 'None yet', tone: 'purple' },
       { label: 'Latest Reem', value: latestReem?.title ?? 'Waiting for signal', tone: 'gold' },
       { label: 'Biggest payout', value: biggestPayout?.title ?? 'Waiting for signal', tone: 'green' },
-      { label: 'Top player', value: topPlayer?.displayName ?? 'None yet', tone: 'blue' },
+      { label: 'Top player', value: topPlayer?.displayName ?? topPlayer?.username ?? 'None yet', tone: 'blue' },
       { label: 'Support issues', value: supportIssues, tone: supportIssues ? 'orange' : 'green' }
     ],
     recommendedActions: growthPlays.map(serialize),
@@ -139,8 +148,29 @@ export const getSystemHealth = async () => {
     };
   }
 
+  const db = mongoose.connection.db;
+  if (!db) throw new Error('MongoDB is not connected.');
+  const collections = new Set((await db.listCollections().toArray()).map((collection) => collection.name));
+  const hasOriginalPlayers = collections.has('hq_users');
+  const hasOriginalWallets = collections.has('wallets');
+  const hasOriginalMatches = collections.has('matches');
+  const playerDataSource = {
+    component: 'Player Data Source',
+    status: hasOriginalPlayers && hasOriginalWallets ? 'Healthy' : hasOriginalPlayers ? 'Warning' : 'Warning',
+    detail: hasOriginalPlayers
+      ? `Source: Original ReemTeam players. Balance source: wallets.rtcBalance. Stats source: completed matches with player_stats_daily/profile fallback.`
+      : 'Source: fallback HQ users. Original hq_users collection was not found.',
+    metadata: {
+      source: hasOriginalPlayers ? 'Original ReemTeam Players' : 'Fallback HQ users',
+      balanceSourceField: hasOriginalWallets ? 'wallets.rtcBalance' : 'none_detected',
+      statsSourceField: hasOriginalMatches ? 'matches.players/winner/winType' : 'hq_user_profiles stats fields',
+      dailyStatsFallback: collections.has('player_stats_daily'),
+      walletCollectionFound: hasOriginalWallets,
+      lastChecked: new Date().toISOString()
+    }
+  };
   const [users, tables, cribs, events, signals, growthPlays] = await Promise.all([
-    User.countDocuments(),
+    hasOriginalPlayers ? db.collection('hq_users').estimatedDocumentCount() : User.countDocuments(),
     Table.countDocuments(),
     Crib.countDocuments(),
     Event.countDocuments(),
@@ -152,6 +182,7 @@ export const getSystemHealth = async () => {
     checks: [
       { component: 'API', status: 'Healthy', detail: 'Express API is responding.' },
       { component: 'Database', status: 'Healthy', detail: 'MongoDB queries completed.' },
+      playerDataSource,
       { component: 'Redis/jobs', status: 'Warning', detail: 'Redis is configured for worker expansion but no worker is required for this clean slate yet.' },
       { component: 'Game data ingestion', status: signals > 0 ? 'Healthy' : 'Warning', detail: `${signals} intelligence signals stored.` },
       { component: 'Publishing', status: 'Warning', detail: 'Publishing adapters are intentionally stubbed until credentials are connected.' }

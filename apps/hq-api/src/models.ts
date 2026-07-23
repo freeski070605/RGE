@@ -59,6 +59,7 @@ const UserSchema = new Schema(
     legacy: {
       sourceCollection: { type: String, index: true },
       sourceId: { type: String, index: true },
+      profileId: { type: String, index: true },
       importedAt: Date
     }
   },

@@ -12,7 +12,8 @@ import {
   hqModels,
   serialize
 } from './services.js';
-import { autoImportExistingPlayersIfNeeded, defaultPlayerSourceCollections, importExistingPlayers } from './playerImport.js';
+import { defaultPlayerSourceCollections, importExistingPlayers } from './playerImport.js';
+import { adjustReemTeamWallet, getPlayerDataIntegrity, getReemTeamPlayer, getReemTeamWalletProfile, listReemTeamPlayers, listReemTeamWallets, patchReemTeamUser, syncPlayerOverlays } from './services/hq/players/reemTeamPlayerAdapter.js';
 
 export const router = Router();
 
@@ -149,6 +150,7 @@ const draftSchema = z.object({
 });
 const referralSchema = z.object({ ownerUserId: z.string().min(1), code: z.string().min(2), invitedUserId: z.string().optional(), status: z.enum(['active', 'converted', 'rewarded', 'flagged']).optional(), rewardAmount: z.number().optional(), abuseFlags: z.array(z.string()).optional() });
 const walletAdjustmentSchema = z.object({ userId: z.string().min(1), amount: z.number(), reason: z.string().min(1) });
+const liveWalletAdjustmentSchema = walletAdjustmentSchema.extend({ currency: z.enum(['USD', 'RTC']).optional() });
 const supportSchema = z.object({ userId: z.string().optional(), title: z.string().min(1), status: z.enum(['open', 'resolved']).optional(), severity: z.enum(['low', 'medium', 'high']).optional(), notes: z.array(z.string()).optional() });
 const performanceSchema = z.object({ contentDraftId: z.string().optional(), growthPlayId: z.string().optional(), campaignId: z.string().optional(), channel: z.string().min(1), format: z.string().optional(), metric: z.string().min(1), value: z.number(), learning: z.string().min(1), metadata: object.optional() });
 
@@ -207,10 +209,8 @@ router.use('/hq', requireAuth);
 router.get('/hq/command-center', asyncRoute(async (_request: any, response: any) => response.json(await getCommandCenter())));
 
 router.get('/hq/users', asyncRoute(async (request: any, response: any) => {
-  await autoImportExistingPlayersIfNeeded();
   const search = typeof request.query.search === 'string' ? request.query.search : '';
-  const query = search ? { $or: [{ displayName: new RegExp(search, 'i') }, { username: new RegExp(search, 'i') }, { email: new RegExp(search, 'i') }] } : {};
-  await list(hqModels.User, response, query);
+  response.json(await listReemTeamPlayers(search));
 }));
 router.post('/hq/users', requireRoles(['owner', 'admin', 'operator']), asyncRoute(async (request: any, response: any) => {
   const body = userSchema.parse(request.body);
@@ -233,6 +233,17 @@ router.post('/hq/users/import-existing', requireRoles(['owner', 'admin', 'operat
 }));
 router.get('/hq/users/:id', asyncRoute(async (request: any, response: any) => {
   const { id } = idParam.parse(request.params);
+  const realPlayer = await getReemTeamPlayer(id);
+  if (realPlayer) {
+    const [notes, walletLedger, supportHistory, referrals, adminActions] = await Promise.all([
+      hqModels.AdminNote.find({ userId: realPlayer.hqOverlay?.id ?? realPlayer.id }).sort({ createdAt: -1 }).lean(),
+      hqModels.WalletLedger.find({ userId: realPlayer.hqOverlay?.id ?? realPlayer.id }).sort({ createdAt: -1 }).lean(),
+      hqModels.SupportIssue.find({ userId: realPlayer.hqOverlay?.id ?? realPlayer.id }).sort({ createdAt: -1 }).lean(),
+      hqModels.Referral.find({ $or: [{ ownerUserId: realPlayer.hqOverlay?.id ?? realPlayer.id }, { invitedUserId: realPlayer.hqOverlay?.id ?? realPlayer.id }] }).sort({ createdAt: -1 }).lean(),
+      hqModels.AdminActionLog.find({ targetType: 'user', targetId: { $in: [realPlayer.id, realPlayer.hqOverlay?.id].filter(Boolean) } }).sort({ createdAt: -1 }).lean()
+    ]);
+    return response.json({ ...realPlayer, notes: notes.map(serialize), walletLedger: walletLedger.map(serialize), supportHistory: supportHistory.map(serialize), referralHistory: referrals.map(serialize), adminActions: adminActions.map(serialize) });
+  }
   const user = await hqModels.User.findById(id).lean();
   if (!user) return response.status(404).json({ message: 'User not found' });
   const [profile, notes, walletLedger, supportHistory, referrals, adminActions] = await Promise.all([
@@ -247,6 +258,37 @@ router.get('/hq/users/:id', asyncRoute(async (request: any, response: any) => {
 }));
 router.patch('/hq/users/:id', requireRoles(['owner', 'admin', 'operator', 'support']), asyncRoute(async (request: any, response: any) => patchOne(request, response, hqModels.User, userUpdateSchema, 'user', request.body?.status === 'suspended' ? 'user_suspended' : 'user_updated')));
 router.patch('/hq/users/:id/status', requireRoles(['owner', 'admin', 'operator', 'support']), asyncRoute(async (request: any, response: any) => patchOne(request, response, hqModels.User, statusSchema, 'user', request.body?.status === 'suspended' ? 'user_suspended' : 'user_updated')));
+router.post('/hq/users/:id/ban', requireRoles(['owner', 'admin', 'operator', 'support']), asyncRoute(async (request: any, response: any) => {
+  const { id } = idParam.parse(request.params);
+  const player = await patchReemTeamUser(id, { isBanned: request.body?.isBanned !== false });
+  if (!player) return response.status(404).json({ message: 'User not found' });
+  await logAdminAction(request.operator, { actionType: 'user_ban_updated', targetType: 'user', targetId: id, description: `Updated ban state for ${player.username}.`, metadata: { isBanned: player.isBanned } });
+  response.json(player);
+}));
+router.post('/hq/users/:id/freeze', requireRoles(['owner', 'admin', 'operator', 'support']), asyncRoute(async (request: any, response: any) => {
+  const { id } = idParam.parse(request.params);
+  const player = await patchReemTeamUser(id, { isFrozen: request.body?.isFrozen !== false });
+  if (!player) return response.status(404).json({ message: 'User not found' });
+  await logAdminAction(request.operator, { actionType: 'user_freeze_updated', targetType: 'user', targetId: id, description: `Updated freeze state for ${player.username}.`, metadata: { isFrozen: player.isFrozen } });
+  response.json(player);
+}));
+router.post('/hq/users/:id/role', requireRoles(['owner', 'admin']), asyncRoute(async (request: any, response: any) => {
+  const { id } = idParam.parse(request.params);
+  const role = roleSchema.parse(request.body?.role);
+  const player = await patchReemTeamUser(id, { role });
+  if (!player) return response.status(404).json({ message: 'User not found' });
+  await logAdminAction(request.operator, { actionType: 'user_role_updated', targetType: 'user', targetId: id, description: `Updated role for ${player.username}.`, metadata: { role } });
+  response.json(player);
+}));
+router.post('/hq/users/:id/vip', requireRoles(['owner', 'admin', 'operator']), asyncRoute(async (request: any, response: any) => {
+  const { id } = idParam.parse(request.params);
+  const isVip = request.body?.isVip !== false;
+  const patch = { vipStatus: isVip ? 'ACTIVE' : 'NONE', vipSince: isVip ? new Date() : null, vipExpiresAt: request.body?.vipExpiresAt ? new Date(request.body.vipExpiresAt) : null };
+  const player = await patchReemTeamUser(id, patch);
+  if (!player) return response.status(404).json({ message: 'User not found' });
+  await logAdminAction(request.operator, { actionType: 'user_vip_updated', targetType: 'user', targetId: id, description: `Updated VIP state for ${player.username}.`, metadata: patch });
+  response.json(player);
+}));
 router.post('/hq/users/:id/notes', requireRoles(['owner', 'admin', 'operator', 'support', 'moderator']), asyncRoute(async (request: any, response: any) => {
   const { id } = idParam.parse(request.params);
   const body = noteSchema.parse(request.body);
@@ -399,13 +441,33 @@ router.get('/hq/referrals/summary', asyncRoute(async (_request: any, response: a
   response.json({ total, converted, rewarded, flagged, topReferrers });
 }));
 
-router.get('/hq/wallet', asyncRoute(async (_request: any, response: any) => list(hqModels.WalletLedger, response)));
-router.get('/hq/wallet/:userId', asyncRoute(async (request: any, response: any) => response.json((await hqModels.WalletLedger.find({ userId: request.params.userId }).sort({ createdAt: -1 }).lean()).map(serialize))));
+router.get('/hq/wallet', asyncRoute(async (request: any, response: any) => {
+  const search = typeof request.query.search === 'string' ? request.query.search : '';
+  response.json(await listReemTeamWallets(search));
+}));
+router.get('/hq/wallet/:userId', asyncRoute(async (request: any, response: any) => {
+  const profile = await getReemTeamWalletProfile(request.params.userId);
+  const ledger = (await hqModels.WalletLedger.find({ userId: request.params.userId }).sort({ createdAt: -1 }).lean()).map(serialize);
+  response.json({
+    playerId: request.params.userId,
+    ...(profile ?? { wallet: null, transactions: [] }),
+    walletSummary: profile?.wallet ?? null,
+    ledger,
+    source: profile ? 'original_reemteam_admin_wallets' : 'hq_wallet_ledger_only'
+  });
+}));
 router.post('/hq/wallet/adjustment-request', requireRoles(['owner', 'admin']), asyncRoute(async (request: any, response: any) => {
   const body = walletAdjustmentSchema.parse(request.body);
   const entry = await hqModels.WalletLedger.create({ ...body, type: 'adjustment', suspicious: Math.abs(body.amount) >= 10000 });
   await logAdminAction(request.operator, { actionType: 'wallet_adjustment_requested', targetType: 'wallet', targetId: String(entry._id), description: `Requested wallet adjustment for ${body.userId}.`, metadata: body });
   response.status(201).json(serialize(entry));
+}));
+router.post('/hq/wallet/adjust', requireRoles(['owner', 'admin']), asyncRoute(async (request: any, response: any) => {
+  const body = liveWalletAdjustmentSchema.parse(request.body);
+  const result = await adjustReemTeamWallet({ ...body, actorId: request.operator.id });
+  if (!result) return response.status(404).json({ message: 'User not found' });
+  await logAdminAction(request.operator, { actionType: 'wallet_adjusted', targetType: 'wallet', targetId: body.userId, description: `Adjusted ${body.currency ?? 'RTC'} wallet.`, metadata: body });
+  response.json(result);
 }));
 
 router.get('/hq/support', asyncRoute(async (_request: any, response: any) => list(hqModels.SupportIssue, response)));
@@ -429,6 +491,13 @@ router.get('/hq/analytics/what-worked', asyncRoute(async (_request: any, respons
 router.post('/hq/analytics/performance-results', requireRoles(['owner', 'admin', 'operator']), asyncRoute(async (request: any, response: any) => {
   const result = await hqModels.PerformanceResult.create(performanceSchema.parse(request.body));
   response.status(201).json(serialize(result));
+}));
+
+router.get('/hq/data-integrity/players', requireRoles(['owner', 'admin', 'operator']), asyncRoute(async (_request: any, response: any) => {
+  response.json(await getPlayerDataIntegrity());
+}));
+router.post('/hq/data-integrity/players/sync-overlays', requireRoles(['owner', 'admin']), asyncRoute(async (_request: any, response: any) => {
+  response.json(await syncPlayerOverlays());
 }));
 
 router.get('/hq/settings', asyncRoute(async (_request: any, response: any) => {

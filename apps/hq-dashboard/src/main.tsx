@@ -42,7 +42,7 @@ const defaults: Record<string, AnyRow> = {
   'Game Intelligence': { signalType: 'reem_detected', sourceType: 'gameplay', sourceId: `manual-${Date.now()}`, title: '', description: '', occurredAt: new Date().toISOString(), severity: 'high', confidence: 90, visibilitySafe: true },
   'Content Studio': { title: '', format: 'IG Story', channel: 'Content Studio', caption: '', hook: '', overlayText: '', cta: 'Join the action', status: 'draft' },
   Referrals: { ownerUserId: '', code: '', status: 'active', rewardAmount: 0 },
-  'Wallet/Ops': { userId: '', amount: 0, reason: '' },
+  'Wallet/Ops': { userId: '', amount: 0, currency: 'RTC', reason: '' },
   Support: { userId: '', title: '', severity: 'medium', status: 'open', notes: [] },
   Analytics: { channel: 'IG Story', format: 'Leaderboard card', metric: 'table_joins', value: 0, learning: '' },
   Settings: { automationMode: 'assisted', approvedChannels: ['Content Studio', 'In-app banner', 'Push notification'], approvedFormats: ['IG Story', 'Leaderboard card', 'Referral promo'], activeCampaign: '' }
@@ -75,7 +75,7 @@ const fields: Record<string, string[]> = {
   'Growth Plays': ['title', 'playType', 'urgency', 'finalScore', 'status', 'recommendedAction'],
   'Content Studio': ['title', 'format', 'channel', 'caption', 'status', 'scheduledFor'],
   Referrals: ['code', 'ownerUserId', 'invitedUserId', 'status', 'rewardAmount', 'abuseFlags'],
-  'Wallet/Ops': ['userId', 'type', 'amount', 'reason', 'suspicious'],
+  'Wallet/Ops': ['username', 'email', 'usdBalance', 'rtcBalance', 'pendingWithdrawals', 'lifetimeDeposits', 'lifetimeWithdrawals'],
   Support: ['title', 'userId', 'severity', 'status', 'notes'],
   Analytics: ['learning', 'channel', 'format', 'metric', 'value'],
   'System Health': ['component', 'status', 'detail'],
@@ -176,7 +176,7 @@ function App() {
 
   const submit = async (page: string) => {
     const body = normalizePayload(draft[page] ?? {});
-    const endpoint = page === 'Analytics' ? '/hq/analytics/performance-results' : page === 'Wallet/Ops' ? '/hq/wallet/adjustment-request' : endpoints[page];
+    const endpoint = page === 'Analytics' ? '/hq/analytics/performance-results' : page === 'Wallet/Ops' ? '/hq/wallet/adjust' : endpoints[page];
     const method = page === 'Settings' ? 'PATCH' : 'POST';
     await run(async () => {
       await api(endpoint, { method, body: JSON.stringify(body) });
@@ -341,6 +341,7 @@ function Detail({ page, row, run, loadAll }: { page: string; row: AnyRow; run: (
         {page === 'Campaigns' ? <><button onClick={() => void action(`${endpoint}/${row.id}/activate`)}>Activate</button><button onClick={() => void action(`${endpoint}/${row.id}/deactivate`)}>Deactivate</button></> : null}
         {page === 'Growth Plays' ? <><button onClick={() => void action(`${endpoint}/${row.id}/approve`)}>Approve</button><button onClick={() => void action(`${endpoint}/${row.id}/dismiss`)}>Dismiss</button><button className="primary" onClick={() => void action(`${endpoint}/${row.id}/build-content`)}>Build Content</button></> : null}
         {page === 'Content Studio' ? <><button onClick={() => void action(`${endpoint}/${row.id}/approve`)}>Approve</button><button onClick={() => void action(`${endpoint}/${row.id}/schedule`, 'POST', { scheduledFor: localDate(2) })}>Schedule</button><button className="primary" onClick={() => void action(`${endpoint}/${row.id}/publish-now`)}>Publish Now</button></> : null}
+        {page === 'Players' ? <><button onClick={() => void action(`${endpoint}/${row.id}/ban`, 'POST', { isBanned: !row.isBanned })}>{row.isBanned ? 'Unban' : 'Ban'}</button><button onClick={() => void action(`${endpoint}/${row.id}/freeze`, 'POST', { isFrozen: !row.isFrozen })}>{row.isFrozen ? 'Unfreeze' : 'Freeze'}</button><button onClick={() => void action(`${endpoint}/${row.id}/vip`, 'POST', { isVip: !row.isVip })}>{row.isVip ? 'Remove VIP' : 'Make VIP'}</button></> : null}
         {page === 'Support' ? <button className="primary" onClick={() => void action(`${endpoint}/${row.id}/resolve`)}>Resolve</button> : null}
       </div>
     </Panel>

@@ -60,20 +60,81 @@ test('ReemTeamHQ CRUD, Growth Plays, Content Studio, and audit log are clean-sla
     await mongoose.default.connection.db?.collection('hq_user_profiles').insertOne({
       userId: legacyUserId,
       displayName: 'Legacy Live Player',
-      gamesPlayed: 33,
-      wins: 20,
-      losses: 13,
-      reems: 5,
-      walletSummary: { credits: 1200 },
+      gamesPlayed: 0,
+      wins: 0,
+      losses: 0,
+      reems: 0,
+      walletSummary: { credits: 0 },
       tags: ['content_safe']
+    });
+    await mongoose.default.connection.db?.collection('wallets').insertOne({
+      userId: legacyUserId,
+      usdBalance: 15,
+      rtcBalance: 83000,
+      availableBalance: 15,
+      pendingWithdrawals: 0,
+      lifetimeDeposits: 25,
+      lifetimeWithdrawals: 10,
+      lastRtcRefill: new Date()
+    });
+    const tableId = new mongoose.default.Types.ObjectId();
+    await mongoose.default.connection.db?.collection('tables').insertOne({
+      _id: tableId,
+      mode: 'FREE_RTC_TABLE'
+    });
+    await mongoose.default.connection.db?.collection('matches').insertMany([
+      {
+        tableId,
+        status: 'completed',
+        winner: legacyUserId,
+        winType: 'REEM',
+        players: [{ userId: legacyUserId, username: 'legacy_live', stake: 100, buyIn: 100, payout: 250, isAI: false }],
+        endTime: new Date()
+      },
+      {
+        tableId,
+        status: 'completed',
+        winner: new mongoose.default.Types.ObjectId(),
+        winType: 'REGULAR',
+        players: [{ userId: legacyUserId, username: 'legacy_live', stake: 50, buyIn: 50, payout: -50, isAI: false }],
+        endTime: new Date()
+      }
+    ]);
+    await mongoose.default.connection.db?.collection('transactions').insertOne({
+      userId: legacyUserId,
+      type: 'RtcPurchase',
+      amount: 73000,
+      currency: 'RTC',
+      status: 'Completed',
+      date: new Date()
     });
     server = createApp().listen(port);
 
     const importedPlayers = await api('/api/hq/users');
     assert.equal(importedPlayers.status, 200);
     assert.equal(importedPlayers.payload.some((row: any) => row.username === 'legacy_live'), true);
-    assert.equal(importedPlayers.payload.find((row: any) => row.username === 'legacy_live')?.rtcBalance, 1200);
+    assert.equal(importedPlayers.payload.find((row: any) => row.username === 'legacy_live')?.rtcBalance, 83000);
+    assert.equal(importedPlayers.payload.find((row: any) => row.username === 'legacy_live')?.gamesPlayed, 2);
+    assert.equal(importedPlayers.payload.find((row: any) => row.username === 'legacy_live')?.wins, 1);
     assert.equal(await User.countDocuments({ username: 'legacy_live' }), 1);
+
+    const originalProfile = await api(`/api/hq/users/${legacyUserId}`);
+    assert.equal(originalProfile.status, 200);
+    assert.equal(originalProfile.payload.source, 'original_reemteam_players');
+    assert.equal(originalProfile.payload.walletSummary.rtcBalance, 83000);
+    assert.equal(originalProfile.payload.playerStats.gamesPlayed, 2);
+    assert.equal(originalProfile.payload.playerStats.reems, 1);
+
+    const originalWallet = await api(`/api/hq/wallet/${legacyUserId}`);
+    assert.equal(originalWallet.status, 200);
+    assert.equal(originalWallet.payload.source, 'original_reemteam_admin_wallets');
+    assert.equal(originalWallet.payload.wallet.rtcBalance, 83000);
+    assert.equal(originalWallet.payload.transactions.length, 1);
+
+    const integrity = await api('/api/hq/data-integrity/players');
+    assert.equal(integrity.status, 200);
+    assert.equal(integrity.payload.hqReadingFrom, 'original_reemteam_players');
+    assert.equal(integrity.payload.originalPlayerCount, 1);
 
     const user = await api('/api/hq/users', {
       method: 'POST',

@@ -2,6 +2,7 @@ import { connectDatabase, disconnectDatabase } from './db.js';
 import { hqModels } from './services.js';
 import { Operator } from './auth.js';
 import { createGrowthPlayFromSignal, buildContentDraft } from './services.js';
+import mongoose from 'mongoose';
 
 const actor: Operator = {
   id: 'seed',
@@ -11,6 +12,11 @@ const actor: Operator = {
 };
 
 await connectDatabase();
+
+const realPlayerCount = await mongoose.connection.db?.collection('hq_users').estimatedDocumentCount().catch(() => 0) ?? 0;
+if (realPlayerCount > 0 && process.env.DEMO_SEED_ALLOW_REAL_DB !== 'true') {
+  throw new Error('Refusing to run demo seed because original ReemTeam players exist in hq_users. Set DEMO_SEED_ALLOW_REAL_DB=true only for a disposable database.');
+}
 
 await Promise.all([
   hqModels.AdminActionLog.deleteMany({}),

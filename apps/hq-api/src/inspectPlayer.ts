@@ -47,6 +47,18 @@ const compact = (doc: AnyDoc | null | undefined) => {
     depositAmount: doc.depositAmount,
     netPayout: doc.netPayout,
     grossPayout: doc.grossPayout,
+    usdBalance: doc.usdBalance,
+    availableBalance: doc.availableBalance,
+    pendingWithdrawals: doc.pendingWithdrawals,
+    lifetimeDeposits: doc.lifetimeDeposits,
+    lifetimeWithdrawals: doc.lifetimeWithdrawals,
+    type: doc.type,
+    amount: doc.amount,
+    currency: doc.currency,
+    date: doc.date,
+    winner: idOrString(doc.winner),
+    winType: doc.winType,
+    playerCount: Array.isArray(doc.players) ? doc.players.length : undefined,
     updatedAt: doc.updatedAt,
     createdAt: doc.createdAt
   };
@@ -75,6 +87,31 @@ try {
     ? await db.collection('hq_user_profiles').findOne({ userId: typeof userId === 'string' && mongoose.Types.ObjectId.isValid(userId) ? new mongoose.Types.ObjectId(userId) : userId })
     : await db.collection('hq_user_profiles').findOne({ displayName: new RegExp(lookup, 'i') });
   const username = hqUser?.username ?? newUser?.username ?? profile?.username ?? lookup;
+  const wallet = userId
+    ? await db.collection('wallets').findOne({ userId: typeof userId === 'string' && mongoose.Types.ObjectId.isValid(userId) ? new mongoose.Types.ObjectId(userId) : userId })
+    : null;
+  const transactions = userId
+    ? await db.collection('transactions').find({ userId: typeof userId === 'string' && mongoose.Types.ObjectId.isValid(userId) ? new mongoose.Types.ObjectId(userId) : userId }).sort({ date: -1, createdAt: -1 }).limit(10).toArray()
+    : [];
+  const matchRows = userId
+    ? await db.collection('matches').find({
+      status: 'completed',
+      'players.userId': { $in: [userId, idOrString(userId), ...(mongoose.Types.ObjectId.isValid(idOrString(userId)) ? [new mongoose.Types.ObjectId(idOrString(userId))] : [])] }
+    }).sort({ endTime: -1, updatedAt: -1, createdAt: -1 }).limit(20).toArray()
+    : [];
+  const matchRollup = matchRows.reduce((totals: AnyDoc, match) => {
+    const player = Array.isArray(match.players) ? match.players.find((entry: AnyDoc) => idOrString(entry.userId) === idOrString(userId)) : null;
+    if (!player) return totals;
+    totals.rows += 1;
+    totals.matchesPlayed += 1;
+    if (idOrString(match.winner) === idOrString(userId)) {
+      totals.wins += 1;
+      if (match.winType === 'REEM') totals.reems += 1;
+    }
+    totals.highestStake = Math.max(totals.highestStake, numberValue(player, ['stake']));
+    totals.grossPayout += Math.max(0, numberValue(player, ['payout']));
+    return totals;
+  }, { rows: 0, matchesPlayed: 0, wins: 0, reems: 0, highestStake: 0, grossPayout: 0 });
   const dailyRows = await db.collection('player_stats_daily').find({
     $or: [
       ...(userId ? [{ playerId: userId }, { playerId: idOrString(userId) }] : []),
@@ -105,6 +142,10 @@ try {
     resolvedUserId: idOrString(userId),
     hqUser: compact(hqUser),
     hqUserProfile: compact(profile),
+    wallet: compact(wallet),
+    transactionsSample: transactions.slice(0, 3).map(compact),
+    completedMatchRollup: matchRollup,
+    completedMatchSample: matchRows.slice(0, 3).map(compact),
     currentReemTeamHqUser: compact(newUser),
     playerStatsDailyRollup: dailyRollup,
     playerStatsDailySample: dailyRows.slice(0, 3).map(compact)
