@@ -13,9 +13,9 @@ const actor: Operator = {
 
 await connectDatabase();
 
-const realPlayerCount = await mongoose.connection.db?.collection('hq_users').estimatedDocumentCount().catch(() => 0) ?? 0;
+const realPlayerCount = await mongoose.connection.db?.collection('users').estimatedDocumentCount().catch(() => 0) ?? 0;
 if (realPlayerCount > 0 && process.env.DEMO_SEED_ALLOW_REAL_DB !== 'true') {
-  throw new Error('Refusing to run demo seed because original ReemTeam players exist in hq_users. Set DEMO_SEED_ALLOW_REAL_DB=true only for a disposable database.');
+  throw new Error('Refusing to run demo seed because original ReemTeam players exist in users. Set DEMO_SEED_ALLOW_REAL_DB=true only for a disposable database.');
 }
 
 await Promise.all([

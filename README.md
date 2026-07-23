@@ -22,11 +22,10 @@ npm run build
 npm test
 npm run inspect:players -w @reemteam/hq-api
 npm run inspect:player -w @reemteam/hq-api
-npm run seed:players -w @reemteam/hq-api
 npm run hq:players:sync -w @reemteam/hq-api
 ```
 
-`inspect:players` lists Mongo collections, document counts, and sample keys so you can find the legacy player collection. `inspect:player` shows one player's raw legacy profile, real wallet, recent transactions, completed-match rollup, current HQ overlay, and daily stat rollup; set `PLAYER_LOOKUP=username` before running it. `hq:players:sync` creates missing HQ overlay records for original ReemTeam players without overwriting original balances or stats. `seed:players` remains available for explicit migration/backfill work, but ReemTeamHQ reads original `hq_users`, `hq_user_profiles`, `wallets`, `matches`, and `transactions` first.
+`inspect:players` lists Mongo collections, document counts, and sample keys so you can verify the live ReemTeam data source. `inspect:player` shows one player's original `users` record, real wallet, recent transactions, completed-match rollup, legacy HQ profile if present, and daily stat rollup; set `PLAYER_LOOKUP=username` before running it. ReemTeamHQ reads original `users`, `wallets`, `matches`, and `transactions` first so balances and lifetime stats match the main ReemTeam app. HQ no longer creates player overlay records.
 
 ## Product Loop
 

@@ -50,12 +50,14 @@ test('ReemTeamHQ CRUD, Growth Plays, Content Studio, and audit log are clean-sla
     await connectDatabase();
     await mongoose.default.connection.db?.dropDatabase();
     const legacyUserId = new mongoose.default.Types.ObjectId();
-    await mongoose.default.connection.db?.collection('hq_users').insertOne({
+    await mongoose.default.connection.db?.collection('users').insertOne({
       _id: legacyUserId,
       displayName: 'Legacy Live Player',
       username: 'legacy_live',
+      email: 'legacy@example.com',
       role: 'player',
-      status: 'active'
+      status: 'active',
+      isVip: true
     });
     await mongoose.default.connection.db?.collection('hq_user_profiles').insertOne({
       userId: legacyUserId,
@@ -116,7 +118,7 @@ test('ReemTeamHQ CRUD, Growth Plays, Content Studio, and audit log are clean-sla
     assert.equal(importedPlayers.payload.find((row: any) => row.username === 'legacy_live')?.rtcBalance, 83000);
     assert.equal(importedPlayers.payload.find((row: any) => row.username === 'legacy_live')?.gamesPlayed, 2);
     assert.equal(importedPlayers.payload.find((row: any) => row.username === 'legacy_live')?.wins, 1);
-    assert.equal(await User.countDocuments({ username: 'legacy_live' }), 1);
+    assert.equal(await User.countDocuments({ username: 'legacy_live' }), 0);
 
     const originalProfile = await api(`/api/hq/users/${legacyUserId}`);
     assert.equal(originalProfile.status, 200);
@@ -147,15 +149,16 @@ test('ReemTeamHQ CRUD, Growth Plays, Content Studio, and audit log are clean-sla
         gamesPlayed: 12
       }
     });
-    assert.equal(user.status, 201, JSON.stringify(user.payload));
+    assert.equal(user.status, 409, JSON.stringify(user.payload));
+    const playerId = String(legacyUserId);
 
-    const tagged = await api(`/api/hq/users/${user.payload.id}/tags`, {
+    const tagged = await api(`/api/hq/users/${playerId}/tags`, {
       method: 'PATCH',
-      body: { add: ['hot_player'], remove: ['vip'] }
+      body: { add: ['hot_player'], remove: ['content_safe'] }
     });
     assert.equal(tagged.status, 200);
     assert.equal(tagged.payload.tags.includes('hot_player'), true);
-    assert.equal(tagged.payload.tags.includes('vip'), false);
+    assert.equal(tagged.payload.tags.includes('content_safe'), false);
 
     const crib = await api('/api/hq/cribs', {
       method: 'POST',
@@ -215,7 +218,7 @@ test('ReemTeamHQ CRUD, Growth Plays, Content Studio, and audit log are clean-sla
         signalType: 'reem_detected',
         sourceType: 'gameplay',
         sourceId: 'round-1',
-        playerId: user.payload.id,
+        playerId,
         tableId: table.payload.id,
         cribId: crib.payload.id,
         eventId: event.payload.id,
@@ -260,7 +263,7 @@ test('ReemTeamHQ CRUD, Growth Plays, Content Studio, and audit log are clean-sla
     const referral = await api('/api/hq/referrals', {
       method: 'POST',
       body: {
-        ownerUserId: user.payload.id,
+        ownerUserId: playerId,
         code: 'MAYA50',
         status: 'converted',
         rewardAmount: 50
@@ -273,7 +276,7 @@ test('ReemTeamHQ CRUD, Growth Plays, Content Studio, and audit log are clean-sla
     const wallet = await api('/api/hq/wallet/adjustment-request', {
       method: 'POST',
       body: {
-        userId: user.payload.id,
+        userId: playerId,
         amount: 25,
         reason: 'Referral reward approval'
       }
@@ -284,7 +287,7 @@ test('ReemTeamHQ CRUD, Growth Plays, Content Studio, and audit log are clean-sla
     const issue = await api('/api/hq/support', {
       method: 'POST',
       body: {
-        userId: user.payload.id,
+        userId: playerId,
         title: 'Verify payout screenshot',
         severity: 'medium',
         notes: ['Player submitted receipt.']
@@ -347,7 +350,7 @@ test('ReemTeamHQ CRUD, Growth Plays, Content Studio, and audit log are clean-sla
     assert.equal(command.payload.product, 'ReemTeamHQ');
 
     const actions = await AdminActionLog.find().lean();
-    assert.equal(actions.some((action) => action.actionType === 'user_created'), true);
+    assert.equal(actions.some((action) => action.actionType === 'user_updated'), true);
     assert.equal(actions.some((action) => action.actionType === 'growth_play_created'), true);
     assert.equal(actions.some((action) => action.actionType === 'content_created'), true);
     assert.equal(actions.some((action) => action.actionType === 'campaign_activated'), true);

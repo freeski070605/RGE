@@ -3,11 +3,11 @@ import type { Db } from 'mongodb';
 import { hqModels, serialize } from '../../../services.js';
 import { getDailyStatsRollup, getMatchStatsRollup } from '../stats/reemTeamStatsAdapter.js';
 import { firstBalanceField, getTransactionsForUser, getWalletForUser } from '../wallet/reemTeamWalletAdapter.js';
-import { asObjectId, idString, mapReemTeamPlayer, toHqRole, toOriginalRole } from './playerProfileMapper.js';
+import { asObjectId, idString, mapReemTeamPlayer, toOriginalRole } from './playerProfileMapper.js';
 
 type AnyDoc = Record<string, any>;
 
-const userCollection = 'hq_users';
+const userCollection = 'users';
 const profileCollection = 'hq_user_profiles';
 const walletCollection = 'wallets';
 
@@ -34,7 +34,7 @@ export const getPlayerDataSource = async (db = getDb()) => {
 
   return {
     mode: hasOriginalUsers ? 'original_reemteam_players' : 'fallback_hq_users',
-    userCollection: hasOriginalUsers ? userCollection : 'users',
+    userCollection: hasOriginalUsers ? userCollection : 'hq_manual_players',
     profileCollection: hasOriginalProfiles ? profileCollection : 'user_profiles',
     walletCollection: hasWallets ? walletCollection : 'none_detected',
     balanceSourceField: balance.path || 'none_detected',
@@ -54,32 +54,7 @@ const profileFor = async (db: Db, user: AnyDoc) =>
   db.collection(profileCollection).findOne({ username: user.username }) ??
   db.collection(profileCollection).findOne({ displayName: user.displayName });
 
-const overlayFor = async (user: AnyDoc, profile?: AnyDoc | null) =>
-  hqModels.User.findOne({
-    $or: [
-      { 'legacy.sourceId': idString(user._id) },
-      { username: user.username },
-      ...(user.email ? [{ email: user.email }] : []),
-      ...(profile?._id ? [{ 'legacy.profileId': idString(profile._id) }] : [])
-    ]
-  });
-
-export const ensurePlayerOverlay = async (user: AnyDoc, profile?: AnyDoc | null) => {
-  const existing = await overlayFor(user, profile);
-  if (existing) return existing;
-  return hqModels.User.create({
-    displayName: profile?.displayName ?? user.displayName ?? user.username ?? `Player ${idString(user._id).slice(-6)}`,
-    username: user.username ?? `player_${idString(user._id).slice(-8)}`,
-    email: user.email,
-    phone: profile?.contact?.phone ?? user.phone,
-    role: toHqRole(user.role),
-    status: user.status ?? 'active',
-    tags: profile?.tags ?? [],
-    riskFlags: profile?.riskFlags ?? [],
-    contentSafe: profile?.contentSafe ?? true,
-    legacy: { sourceCollection: userCollection, sourceId: idString(user._id), profileId: profile?._id ? idString(profile._id) : undefined, importedAt: new Date() }
-  });
-};
+export const ensurePlayerOverlay = async (_user: AnyDoc, _profile?: AnyDoc | null) => null;
 
 export const listReemTeamPlayers = async (search = '') => {
   const db = getDb();
@@ -93,13 +68,12 @@ export const listReemTeamPlayers = async (search = '') => {
   const rows = [];
   for (const user of users) {
     const profile = await profileFor(db, user);
-    const overlay = await ensurePlayerOverlay(user, profile);
     const [wallet, matchStats, dailyStats] = await Promise.all([
       getWalletForUser(db, user._id),
       getMatchStatsRollup(db, user._id),
       getDailyStatsRollup(db, user._id, user.username)
     ]);
-    rows.push(mapReemTeamPlayer({ user, profile, overlay, wallet, dailyStats: matchStats ?? dailyStats }));
+    rows.push(mapReemTeamPlayer({ user, profile, wallet, dailyStats: matchStats ?? dailyStats }));
   }
   return rows;
 };
@@ -111,13 +85,12 @@ export const getReemTeamPlayer = async (id: string) => {
   const user = await db.collection(userCollection).findOne(legacyUserQuery(id));
   if (!user) return null;
   const profile = await profileFor(db, user);
-  const overlay = await ensurePlayerOverlay(user, profile);
   const [wallet, matchStats, dailyStats] = await Promise.all([
     getWalletForUser(db, user._id),
     getMatchStatsRollup(db, user._id),
     getDailyStatsRollup(db, user._id, user.username)
   ]);
-  return mapReemTeamPlayer({ user, profile, overlay, wallet, dailyStats: matchStats ?? dailyStats });
+  return mapReemTeamPlayer({ user, profile, wallet, dailyStats: matchStats ?? dailyStats });
 };
 
 export const patchReemTeamUser = async (id: string, patch: AnyDoc) => {
@@ -131,6 +104,34 @@ export const patchReemTeamUser = async (id: string, patch: AnyDoc) => {
   );
   if (!user) return null;
   return getReemTeamPlayer(idString(user._id));
+};
+
+export const addReemTeamUserNote = async (id: string, note: string, actorId: string) => {
+  const db = getDb();
+  const stamped = { note, actorId, createdAt: new Date() };
+  const user = await db.collection(userCollection).findOneAndUpdate(
+    legacyUserQuery(id),
+    { $push: { adminNotes: stamped } as any, $set: { updatedAt: new Date() } },
+    { returnDocument: 'after' }
+  );
+  if (!user) return null;
+  return { player: await getReemTeamPlayer(idString(user._id)), note: stamped };
+};
+
+export const updateReemTeamUserTags = async (id: string, body: { add?: string[]; remove?: string[]; set?: string[] }) => {
+  const db = getDb();
+  const user = await db.collection(userCollection).findOne(legacyUserQuery(id));
+  if (!user) return null;
+  const tags = new Set<string>(Array.isArray(body.set) ? body.set : Array.isArray(user.tags) ? user.tags : []);
+  body.add?.forEach((tag) => tags.add(tag));
+  body.remove?.forEach((tag) => tags.delete(tag));
+  const updated = await db.collection(userCollection).findOneAndUpdate(
+    { _id: user._id },
+    { $set: { tags: Array.from(tags), updatedAt: new Date() } },
+    { returnDocument: 'after' }
+  );
+  if (!updated) return null;
+  return getReemTeamPlayer(idString(updated._id));
 };
 
 export const listReemTeamWallets = async (search = '') => {
@@ -237,7 +238,6 @@ export const getPlayerDataIntegrity = async () => {
   const collections = await collectionNames(db);
   const originalPlayers = collections.has(userCollection) ? await db.collection(userCollection).find({}).toArray() : [];
   const originalProfiles = collections.has(profileCollection) ? await db.collection(profileCollection).find({}).toArray() : [];
-  const overlays = await hqModels.User.find({}).lean();
   const originalIds = new Set(originalPlayers.map((user) => idString(user._id)));
   const profileUserIds = new Set(originalProfiles.map((profile) => idString(profile.userId)));
 
@@ -270,9 +270,6 @@ export const getPlayerDataIntegrity = async () => {
     originalPlayerCount: originalPlayers.length,
     originalProfileCount: originalProfiles.length,
     originalWalletCount: wallets.length,
-    hqOverlayCount: overlays.length,
-    playersMissingHqOverlayRecords: originalPlayers.filter((user) => !overlays.some((overlay: AnyDoc) => overlay.legacy?.sourceId === idString(user._id) || overlay.username === user.username)).map((user) => idString(user._id)),
-    hqProfilesWithNoMatchingRealPlayer: overlays.filter((overlay: AnyDoc) => overlay.legacy?.sourceId && !originalIds.has(String(overlay.legacy.sourceId))).map((overlay: AnyDoc) => serialize(overlay)),
     originalProfilesWithNoMatchingUser: originalProfiles.filter((profile) => !originalIds.has(idString(profile.userId))).map((profile) => idString(profile._id)),
     playersMissingProfile: originalPlayers.filter((user) => !profileUserIds.has(idString(user._id))).map((user) => idString(user._id)),
     usersWithMissingBalanceField,
@@ -291,24 +288,5 @@ export const getPlayerDataIntegrity = async () => {
 export const syncPlayerOverlays = async () => {
   const db = getDb();
   const source = await getPlayerDataSource(db);
-  if (source.mode !== 'original_reemteam_players') {
-    return { source, matched: 0, createdOverlays: 0, skipped: 0, warnings: ['Original ReemTeam player collection not found.'] };
-  }
-  const users = await db.collection(userCollection).find({}).toArray();
-  let matched = 0;
-  let createdOverlays = 0;
-  let skipped = 0;
-
-  for (const user of users) {
-    const profile = await profileFor(db, user);
-    const existing = await overlayFor(user, profile);
-    if (existing) {
-      matched += 1;
-      continue;
-    }
-    await ensurePlayerOverlay(user, profile);
-    createdOverlays += 1;
-  }
-
-  return { source, matched, createdOverlays, skipped, warnings: [] };
+  return { source, matched: 0, createdOverlays: 0, skipped: 0, warnings: ['HQ no longer creates player overlay records. ReemTeamHQ reads original users directly.'] };
 };

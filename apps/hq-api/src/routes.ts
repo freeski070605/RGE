@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import mongoose from 'mongoose';
 import { z } from 'zod';
 import { campaignTypes, growthPlayTypes, hqRoles, playerTags, signalTypes } from '@reemteam/shared';
 import { authenticateOperator, attachSession, clearSession, requireAuth, requireRoles } from './auth.js';
@@ -12,8 +13,7 @@ import {
   hqModels,
   serialize
 } from './services.js';
-import { defaultPlayerSourceCollections, importExistingPlayers } from './playerImport.js';
-import { adjustReemTeamWallet, getPlayerDataIntegrity, getReemTeamPlayer, getReemTeamWalletProfile, listReemTeamPlayers, listReemTeamWallets, patchReemTeamUser, syncPlayerOverlays } from './services/hq/players/reemTeamPlayerAdapter.js';
+import { addReemTeamUserNote, adjustReemTeamWallet, getPlayerDataIntegrity, getReemTeamPlayer, getReemTeamWalletProfile, listReemTeamPlayers, listReemTeamWallets, patchReemTeamUser, syncPlayerOverlays, updateReemTeamUserTags } from './services/hq/players/reemTeamPlayerAdapter.js';
 
 export const router = Router();
 
@@ -213,6 +213,10 @@ router.get('/hq/users', asyncRoute(async (request: any, response: any) => {
   response.json(await listReemTeamPlayers(search));
 }));
 router.post('/hq/users', requireRoles(['owner', 'admin', 'operator']), asyncRoute(async (request: any, response: any) => {
+  const originalUserCount = await mongoose.connection.db?.collection('users').estimatedDocumentCount().catch(() => 0) ?? 0;
+  if (originalUserCount > 0) {
+    return response.status(409).json({ message: 'ReemTeamHQ reads original ReemTeam users directly. Create player accounts in the main ReemTeam app so wallet and stats stay keyed to the original user id.' });
+  }
   const body = userSchema.parse(request.body);
   const user = await hqModels.User.create(body);
   await hqModels.UserProfile.findOneAndUpdate({ userId: user._id }, { $set: { userId: user._id, displayName: user.displayName, contact: { email: user.email, phone: user.phone }, tags: user.tags, contentSafe: user.contentSafe } }, { upsert: true });
@@ -220,13 +224,18 @@ router.post('/hq/users', requireRoles(['owner', 'admin', 'operator']), asyncRout
   response.status(201).json(serialize(user));
 }));
 router.post('/hq/users/import-existing', requireRoles(['owner', 'admin', 'operator']), asyncRoute(async (request: any, response: any) => {
-  const body = playerImportSchema.parse(request.body ?? {});
-  const result = await importExistingPlayers(body.collections ?? defaultPlayerSourceCollections, body.limit ?? 10000, body.dryRun ?? false);
+  playerImportSchema.parse(request.body ?? {});
+  const result = {
+    imported: 0,
+    updated: 0,
+    skipped: 0,
+    message: 'Player import is disabled. ReemTeamHQ reads original ReemTeam users, wallets, matches, and transactions directly.'
+  };
   await logAdminAction(request.operator, {
-    actionType: 'players_imported',
+    actionType: 'players_import_skipped',
     targetType: 'user',
-    targetId: 'legacy-player-import',
-    description: `${body.dryRun ? 'Checked' : 'Imported'} existing players from legacy HQ collections.`,
+    targetId: 'original-users',
+    description: 'Skipped player import because HQ no longer creates overlay player records.',
     metadata: result
   });
   response.json(result);
@@ -235,12 +244,13 @@ router.get('/hq/users/:id', asyncRoute(async (request: any, response: any) => {
   const { id } = idParam.parse(request.params);
   const realPlayer = await getReemTeamPlayer(id);
   if (realPlayer) {
+    const playerId = realPlayer.id;
     const [notes, walletLedger, supportHistory, referrals, adminActions] = await Promise.all([
-      hqModels.AdminNote.find({ userId: realPlayer.hqOverlay?.id ?? realPlayer.id }).sort({ createdAt: -1 }).lean(),
-      hqModels.WalletLedger.find({ userId: realPlayer.hqOverlay?.id ?? realPlayer.id }).sort({ createdAt: -1 }).lean(),
-      hqModels.SupportIssue.find({ userId: realPlayer.hqOverlay?.id ?? realPlayer.id }).sort({ createdAt: -1 }).lean(),
-      hqModels.Referral.find({ $or: [{ ownerUserId: realPlayer.hqOverlay?.id ?? realPlayer.id }, { invitedUserId: realPlayer.hqOverlay?.id ?? realPlayer.id }] }).sort({ createdAt: -1 }).lean(),
-      hqModels.AdminActionLog.find({ targetType: 'user', targetId: { $in: [realPlayer.id, realPlayer.hqOverlay?.id].filter(Boolean) } }).sort({ createdAt: -1 }).lean()
+      hqModels.AdminNote.find({ userId: playerId }).sort({ createdAt: -1 }).lean(),
+      hqModels.WalletLedger.find({ userId: playerId }).sort({ createdAt: -1 }).lean(),
+      hqModels.SupportIssue.find({ userId: playerId }).sort({ createdAt: -1 }).lean(),
+      hqModels.Referral.find({ $or: [{ ownerUserId: playerId }, { invitedUserId: playerId }] }).sort({ createdAt: -1 }).lean(),
+      hqModels.AdminActionLog.find({ targetType: 'user', targetId: playerId }).sort({ createdAt: -1 }).lean()
     ]);
     return response.json({ ...realPlayer, notes: notes.map(serialize), walletLedger: walletLedger.map(serialize), supportHistory: supportHistory.map(serialize), referralHistory: referrals.map(serialize), adminActions: adminActions.map(serialize) });
   }
@@ -256,8 +266,26 @@ router.get('/hq/users/:id', asyncRoute(async (request: any, response: any) => {
   ]);
   response.json({ ...serialize(user), profile: serialize(profile), notes: notes.map(serialize), walletLedger: walletLedger.map(serialize), supportHistory: supportHistory.map(serialize), referralHistory: referrals.map(serialize), adminActions: adminActions.map(serialize) });
 }));
-router.patch('/hq/users/:id', requireRoles(['owner', 'admin', 'operator', 'support']), asyncRoute(async (request: any, response: any) => patchOne(request, response, hqModels.User, userUpdateSchema, 'user', request.body?.status === 'suspended' ? 'user_suspended' : 'user_updated')));
-router.patch('/hq/users/:id/status', requireRoles(['owner', 'admin', 'operator', 'support']), asyncRoute(async (request: any, response: any) => patchOne(request, response, hqModels.User, statusSchema, 'user', request.body?.status === 'suspended' ? 'user_suspended' : 'user_updated')));
+router.patch('/hq/users/:id', requireRoles(['owner', 'admin', 'operator', 'support']), asyncRoute(async (request: any, response: any) => {
+  const { id } = idParam.parse(request.params);
+  const body = userUpdateSchema.parse(request.body ?? {});
+  const realPlayer = await patchReemTeamUser(id, body);
+  if (realPlayer) {
+    await logAdminAction(request.operator, { actionType: request.body?.status === 'suspended' ? 'user_suspended' : 'user_updated', targetType: 'user', targetId: id, description: `Updated original user ${realPlayer.username}.`, metadata: body });
+    return response.json(realPlayer);
+  }
+  return patchOne(request, response, hqModels.User, userUpdateSchema, 'user', request.body?.status === 'suspended' ? 'user_suspended' : 'user_updated');
+}));
+router.patch('/hq/users/:id/status', requireRoles(['owner', 'admin', 'operator', 'support']), asyncRoute(async (request: any, response: any) => {
+  const { id } = idParam.parse(request.params);
+  const body = statusSchema.parse(request.body ?? {});
+  const realPlayer = await patchReemTeamUser(id, body);
+  if (realPlayer) {
+    await logAdminAction(request.operator, { actionType: body.status === 'suspended' ? 'user_suspended' : 'user_updated', targetType: 'user', targetId: id, description: `Updated original user status for ${realPlayer.username}.`, metadata: body });
+    return response.json(realPlayer);
+  }
+  return patchOne(request, response, hqModels.User, statusSchema, 'user', request.body?.status === 'suspended' ? 'user_suspended' : 'user_updated');
+}));
 router.post('/hq/users/:id/ban', requireRoles(['owner', 'admin', 'operator', 'support']), asyncRoute(async (request: any, response: any) => {
   const { id } = idParam.parse(request.params);
   const player = await patchReemTeamUser(id, { isBanned: request.body?.isBanned !== false });
@@ -292,6 +320,12 @@ router.post('/hq/users/:id/vip', requireRoles(['owner', 'admin', 'operator']), a
 router.post('/hq/users/:id/notes', requireRoles(['owner', 'admin', 'operator', 'support', 'moderator']), asyncRoute(async (request: any, response: any) => {
   const { id } = idParam.parse(request.params);
   const body = noteSchema.parse(request.body);
+  const original = await addReemTeamUserNote(id, body.note, request.operator.id);
+  if (original?.player) {
+    const note = await hqModels.AdminNote.create({ userId: original.player.id, actorId: request.operator.id, note: body.note, visibility: body.visibility });
+    await logAdminAction(request.operator, { actionType: 'note_added', targetType: 'user', targetId: id, description: `Added note for ${original.player.displayName}.` });
+    return response.status(201).json(serialize(note));
+  }
   const user = await hqModels.User.findById(id);
   if (!user) return response.status(404).json({ message: 'User not found' });
   const note = await hqModels.AdminNote.create({ userId: id, actorId: request.operator.id, note: body.note, visibility: body.visibility });
@@ -303,6 +337,11 @@ router.post('/hq/users/:id/notes', requireRoles(['owner', 'admin', 'operator', '
 router.post('/hq/users/:id/tags', requireRoles(['owner', 'admin', 'operator', 'support', 'moderator']), asyncRoute(async (request: any, response: any) => {
   const { id } = idParam.parse(request.params);
   const body = tagUpdateSchema.parse(request.body);
+  const realPlayer = await updateReemTeamUserTags(id, body);
+  if (realPlayer) {
+    await logAdminAction(request.operator, { actionType: 'user_updated', targetType: 'user', targetId: id, description: `Updated tags for original user ${realPlayer.displayName}.`, metadata: { tags: realPlayer.tags } });
+    return response.json(realPlayer);
+  }
   const user = await hqModels.User.findById(id);
   if (!user) return response.status(404).json({ message: 'User not found' });
   const tags = new Set<string>(body.set ?? user.tags);
@@ -316,6 +355,11 @@ router.post('/hq/users/:id/tags', requireRoles(['owner', 'admin', 'operator', 's
 router.patch('/hq/users/:id/tags', requireRoles(['owner', 'admin', 'operator', 'support', 'moderator']), asyncRoute(async (request: any, response: any) => {
   const { id } = idParam.parse(request.params);
   const body = tagUpdateSchema.parse(request.body);
+  const realPlayer = await updateReemTeamUserTags(id, body);
+  if (realPlayer) {
+    await logAdminAction(request.operator, { actionType: 'user_updated', targetType: 'user', targetId: id, description: `Updated tags for original user ${realPlayer.displayName}.`, metadata: { tags: realPlayer.tags } });
+    return response.json(realPlayer);
+  }
   const user = await hqModels.User.findById(id);
   if (!user) return response.status(404).json({ message: 'User not found' });
   const tags = new Set<string>(body.set ?? user.tags);
@@ -327,6 +371,11 @@ router.patch('/hq/users/:id/tags', requireRoles(['owner', 'admin', 'operator', '
   response.json(serialize(user));
 }));
 router.delete('/hq/users/:id/tags/:tag', requireRoles(['owner', 'admin', 'operator', 'support', 'moderator']), asyncRoute(async (request: any, response: any) => {
+  const realPlayer = await updateReemTeamUserTags(request.params.id, { remove: [request.params.tag] });
+  if (realPlayer) {
+    await logAdminAction(request.operator, { actionType: 'user_updated', targetType: 'user', targetId: request.params.id, description: `Removed tag ${request.params.tag} from original user.` });
+    return response.json(realPlayer);
+  }
   const user = await hqModels.User.findByIdAndUpdate(request.params.id, { $pull: { tags: request.params.tag } }, { returnDocument: 'after' });
   if (!user) return response.status(404).json({ message: 'User not found' });
   await logAdminAction(request.operator, { actionType: 'user_updated', targetType: 'user', targetId: request.params.id, description: `Removed tag ${request.params.tag}.` });

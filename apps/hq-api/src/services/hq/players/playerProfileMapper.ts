@@ -9,6 +9,8 @@ export const idString = (value: unknown) => String(value ?? '');
 
 export const asObjectId = (value: string) => (ObjectId.isValid(value) ? new ObjectId(value) : null);
 
+const boolValue = (value: unknown) => value === true || value === 'true' || value === 1 || value === '1';
+
 export const toHqRole = (role: unknown) => {
   if (role === 'superadmin') return 'owner';
   if (role === 'finance') return 'admin';
@@ -36,8 +38,8 @@ export const mapReemTeamPlayer = (input: {
   const { user, profile = null, overlay = null, wallet = null, dailyStats = null } = input;
   const stats = mapProfileStats(profile, dailyStats);
   const walletSummary = mapWalletSummary(profile, user, wallet);
-  const tags = overlay?.tags?.length ? overlay.tags : profile?.tags ?? [];
-  const riskFlags = overlay?.riskFlags?.length ? overlay.riskFlags : profile?.riskFlags ?? [];
+  const tags = user.tags?.length ? user.tags : profile?.tags ?? [];
+  const riskFlags = user.riskFlags?.length ? user.riskFlags : profile?.riskFlags ?? [];
 
   return {
     id: idString(user._id),
@@ -48,13 +50,13 @@ export const mapReemTeamPlayer = (input: {
     phone: user.phone ?? profile?.contact?.phone,
     role: toHqRole(user.role),
     originalRole: user.role ?? 'user',
-    status: user.status ?? 'active',
+    status: user.status ?? (boolValue(user.isBanned) ? 'suspended' : 'active'),
     tags,
     riskFlags,
-    adminNotes: overlay?.adminNotes ?? [],
-    contentSafe: overlay?.contentSafe ?? profile?.contentSafe ?? !tags.includes('do_not_feature'),
+    adminNotes: user.adminNotes ?? [],
+    contentSafe: user.contentSafe ?? profile?.contentSafe ?? !tags.includes('do_not_feature'),
     avatarUrl: user.avatarUrl ?? profile?.avatarUrl ?? null,
-    isVip: user.isVip ?? user.vipStatus === 'ACTIVE',
+    isVip: boolValue(user.isVip) || user.vipStatus === 'ACTIVE',
     vipStatus: user.vipStatus ?? null,
     vipSince: user.vipSince ?? null,
     vipExpiresAt: user.vipExpiresAt ?? null,
@@ -76,7 +78,7 @@ export const mapReemTeamPlayer = (input: {
     averageStake: stats.averageStake,
     highestStake: stats.highestStake,
     totalWinnings: stats.totalWinnings,
-    hqOverlay: overlay ? serialize(overlay) : null,
+    hqOverlay: null,
     original: {
       user: serialize(user),
       profile: serialize(profile),

@@ -63,7 +63,7 @@ const UserSchema = new Schema(
       importedAt: Date
     }
   },
-  { timestamps: true, collection: 'users' }
+  { timestamps: true, collection: 'hq_manual_players' }
 );
 
 const UserProfileSchema = new Schema(

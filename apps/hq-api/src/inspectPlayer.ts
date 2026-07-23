@@ -80,13 +80,14 @@ try {
     ]
   };
 
-  const hqUser = await db.collection('hq_users').findOne(userQuery);
-  const newUser = await db.collection('users').findOne(userQuery);
-  const userId = hqUser?._id ?? newUser?.legacy?.sourceId ?? newUser?._id ?? objectId;
+  const originalUser = await db.collection('users').findOne(userQuery);
+  const manualHqUser = await db.collection('hq_manual_players').findOne(userQuery);
+  const legacyHqUser = await db.collection('hq_users').findOne(userQuery);
+  const userId = originalUser?._id ?? legacyHqUser?._id ?? manualHqUser?.legacy?.sourceId ?? manualHqUser?._id ?? objectId;
   const profile = userId
     ? await db.collection('hq_user_profiles').findOne({ userId: typeof userId === 'string' && mongoose.Types.ObjectId.isValid(userId) ? new mongoose.Types.ObjectId(userId) : userId })
     : await db.collection('hq_user_profiles').findOne({ displayName: new RegExp(lookup, 'i') });
-  const username = hqUser?.username ?? newUser?.username ?? profile?.username ?? lookup;
+  const username = originalUser?.username ?? legacyHqUser?.username ?? manualHqUser?.username ?? profile?.username ?? lookup;
   const wallet = userId
     ? await db.collection('wallets').findOne({ userId: typeof userId === 'string' && mongoose.Types.ObjectId.isValid(userId) ? new mongoose.Types.ObjectId(userId) : userId })
     : null;
@@ -140,13 +141,14 @@ try {
   console.log(JSON.stringify({
     lookup,
     resolvedUserId: idOrString(userId),
-    hqUser: compact(hqUser),
+    originalUser: compact(originalUser),
+    legacyHqUser: compact(legacyHqUser),
     hqUserProfile: compact(profile),
     wallet: compact(wallet),
     transactionsSample: transactions.slice(0, 3).map(compact),
     completedMatchRollup: matchRollup,
     completedMatchSample: matchRows.slice(0, 3).map(compact),
-    currentReemTeamHqUser: compact(newUser),
+    currentReemTeamHqManualPlayer: compact(manualHqUser),
     playerStatsDailyRollup: dailyRollup,
     playerStatsDailySample: dailyRows.slice(0, 3).map(compact)
   }, null, 2));

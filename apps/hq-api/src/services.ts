@@ -84,12 +84,12 @@ export const getCommandCenter = async () => {
   const db = mongoose.connection.db;
   if (!db) throw new Error('MongoDB is not connected.');
   const collections = new Set((await db.listCollections().toArray()).map((collection) => collection.name));
-  const useOriginalPlayers = collections.has('hq_users');
+  const useOriginalPlayers = collections.has('users');
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const [activePlayersToday, gamesPlayedToday, tablesActiveNow, hottestCrib, latestReem, biggestPayout, topPlayer, growthPlays, supportIssues] =
     await Promise.all([
-      useOriginalPlayers && collections.has('hq_user_profiles') ? db.collection('hq_user_profiles').countDocuments({ lastActiveAt: { $gte: today } }) : User.countDocuments({ lastActiveAt: { $gte: today } }),
+      useOriginalPlayers ? db.collection('users').countDocuments({ lastActiveAt: { $gte: today } }) : User.countDocuments({ lastActiveAt: { $gte: today } }),
       GameIntelligenceSignal.countDocuments({ sourceType: 'gameplay', occurredAt: { $gte: today } }),
       Table.countDocuments({ status: 'active' }),
       Crib.findOne({ status: 'active' }).sort({ growthPriority: -1 }).lean(),
@@ -151,7 +151,7 @@ export const getSystemHealth = async () => {
   const db = mongoose.connection.db;
   if (!db) throw new Error('MongoDB is not connected.');
   const collections = new Set((await db.listCollections().toArray()).map((collection) => collection.name));
-  const hasOriginalPlayers = collections.has('hq_users');
+  const hasOriginalPlayers = collections.has('users');
   const hasOriginalWallets = collections.has('wallets');
   const hasOriginalMatches = collections.has('matches');
   const playerDataSource = {
@@ -159,7 +159,7 @@ export const getSystemHealth = async () => {
     status: hasOriginalPlayers && hasOriginalWallets ? 'Healthy' : hasOriginalPlayers ? 'Warning' : 'Warning',
     detail: hasOriginalPlayers
       ? `Source: Original ReemTeam players. Balance source: wallets.rtcBalance. Stats source: completed matches with player_stats_daily/profile fallback.`
-      : 'Source: fallback HQ users. Original hq_users collection was not found.',
+      : 'Source: fallback HQ manual players. Original users collection was not found.',
     metadata: {
       source: hasOriginalPlayers ? 'Original ReemTeam Players' : 'Fallback HQ users',
       balanceSourceField: hasOriginalWallets ? 'wallets.rtcBalance' : 'none_detected',
@@ -170,7 +170,7 @@ export const getSystemHealth = async () => {
     }
   };
   const [users, tables, cribs, events, signals, growthPlays] = await Promise.all([
-    hasOriginalPlayers ? db.collection('hq_users').estimatedDocumentCount() : User.countDocuments(),
+    hasOriginalPlayers ? db.collection('users').estimatedDocumentCount() : User.countDocuments(),
     Table.countDocuments(),
     Crib.countDocuments(),
     Event.countDocuments(),
