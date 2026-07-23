@@ -154,16 +154,29 @@ export const getSystemHealth = async () => {
   const hasOriginalPlayers = collections.has('users');
   const hasOriginalWallets = collections.has('wallets');
   const hasOriginalMatches = collections.has('matches');
+  const [rawUsersCount, rawWalletsCount, rawMatchesCount, rawTransactionsCount] = await Promise.all([
+    hasOriginalPlayers ? db.collection('users').estimatedDocumentCount() : Promise.resolve(0),
+    hasOriginalWallets ? db.collection('wallets').estimatedDocumentCount() : Promise.resolve(0),
+    hasOriginalMatches ? db.collection('matches').estimatedDocumentCount() : Promise.resolve(0),
+    collections.has('transactions') ? db.collection('transactions').estimatedDocumentCount() : Promise.resolve(0)
+  ]);
   const playerDataSource = {
     component: 'Player Data Source',
-    status: hasOriginalPlayers && hasOriginalWallets ? 'Healthy' : hasOriginalPlayers ? 'Warning' : 'Warning',
+    status: hasOriginalPlayers && hasOriginalWallets && hasOriginalMatches ? 'Healthy' : 'Warning',
     detail: hasOriginalPlayers
-      ? `Source: Original ReemTeam players. Balance source: wallets.rtcBalance. Stats source: completed matches with player_stats_daily/profile fallback.`
+      ? `Connected database "${db.databaseName}" has users=${rawUsersCount}, wallets=${rawWalletsCount}, matches=${rawMatchesCount}, transactions=${rawTransactionsCount}.`
       : 'Source: fallback HQ manual players. Original users collection was not found.',
     metadata: {
+      databaseName: db.databaseName,
       source: hasOriginalPlayers ? 'Original ReemTeam Players' : 'Fallback HQ users',
       balanceSourceField: hasOriginalWallets ? 'wallets.rtcBalance' : 'none_detected',
       statsSourceField: hasOriginalMatches ? 'matches.players/winner/winType' : 'hq_user_profiles stats fields',
+      collectionCounts: {
+        users: rawUsersCount,
+        wallets: rawWalletsCount,
+        matches: rawMatchesCount,
+        transactions: rawTransactionsCount
+      },
       dailyStatsFallback: collections.has('player_stats_daily'),
       walletCollectionFound: hasOriginalWallets,
       lastChecked: new Date().toISOString()

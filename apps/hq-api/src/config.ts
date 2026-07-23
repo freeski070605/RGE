@@ -6,7 +6,18 @@ const intFromEnv = (key: string, fallback: number) => {
 };
 
 const resolveMongoUri = () => {
-  const candidates = ['MONGODB_URI', 'MONGO_URI', 'MONGO_URL', 'DATABASE_URL', 'MONGODB_URL', 'DB_URI'];
+  const candidates = [
+    'REEMTEAM_MONGODB_URI',
+    'MAIN_REEMTEAM_MONGODB_URI',
+    'REEMTEAM_DATABASE_URL',
+    'LEGACY_MONGODB_URI',
+    'MONGODB_URI',
+    'MONGO_URI',
+    'MONGO_URL',
+    'DATABASE_URL',
+    'MONGODB_URL',
+    'DB_URI'
+  ];
   for (const key of candidates) {
     const value = process.env[key]?.trim();
     if (value) {
