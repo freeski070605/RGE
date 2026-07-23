@@ -9,6 +9,10 @@ if (!lookup) {
 }
 
 const idOrString = (value: unknown) => String(value ?? '');
+const idVariants = (value: unknown) => {
+  const id = idOrString(value);
+  return mongoose.Types.ObjectId.isValid(id) ? [value, id, new mongoose.Types.ObjectId(id)] : [value, id];
+};
 const numberValue = (source: AnyDoc, keys: string[]) => {
   for (const key of keys) {
     const parsed = Number(source[key]);
@@ -85,19 +89,19 @@ try {
   const legacyHqUser = await db.collection('hq_users').findOne(userQuery);
   const userId = originalUser?._id ?? legacyHqUser?._id ?? manualHqUser?.legacy?.sourceId ?? manualHqUser?._id ?? objectId;
   const profile = userId
-    ? await db.collection('hq_user_profiles').findOne({ userId: typeof userId === 'string' && mongoose.Types.ObjectId.isValid(userId) ? new mongoose.Types.ObjectId(userId) : userId })
+    ? await db.collection('hq_user_profiles').findOne({ userId: { $in: idVariants(userId) } })
     : await db.collection('hq_user_profiles').findOne({ displayName: new RegExp(lookup, 'i') });
   const username = originalUser?.username ?? legacyHqUser?.username ?? manualHqUser?.username ?? profile?.username ?? lookup;
   const wallet = userId
-    ? await db.collection('wallets').findOne({ userId: typeof userId === 'string' && mongoose.Types.ObjectId.isValid(userId) ? new mongoose.Types.ObjectId(userId) : userId })
+    ? await db.collection('wallets').findOne({ userId: { $in: idVariants(userId) } })
     : null;
   const transactions = userId
-    ? await db.collection('transactions').find({ userId: typeof userId === 'string' && mongoose.Types.ObjectId.isValid(userId) ? new mongoose.Types.ObjectId(userId) : userId }).sort({ date: -1, createdAt: -1 }).limit(10).toArray()
+    ? await db.collection('transactions').find({ userId: { $in: idVariants(userId) } }).sort({ date: -1, createdAt: -1 }).limit(10).toArray()
     : [];
   const matchRows = userId
     ? await db.collection('matches').find({
       status: 'completed',
-      'players.userId': { $in: [userId, idOrString(userId), ...(mongoose.Types.ObjectId.isValid(idOrString(userId)) ? [new mongoose.Types.ObjectId(idOrString(userId))] : [])] }
+      'players.userId': { $in: idVariants(userId) }
     }).sort({ endTime: -1, updatedAt: -1, createdAt: -1 }).limit(20).toArray()
     : [];
   const matchRollup = matchRows.reduce((totals: AnyDoc, match) => {

@@ -108,7 +108,7 @@ export const patchReemTeamUser = async (id: string, patch: AnyDoc) => {
 
 export const addReemTeamUserNote = async (id: string, note: string, actorId: string) => {
   const db = getDb();
-  const stamped = { note, actorId, createdAt: new Date() };
+  const stamped = `[${new Date().toISOString()}][${actorId}] ${note}`;
   const user = await db.collection(userCollection).findOneAndUpdate(
     legacyUserQuery(id),
     { $push: { adminNotes: stamped } as any, $set: { updatedAt: new Date() } },

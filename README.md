@@ -23,9 +23,12 @@ npm test
 npm run inspect:players -w @reemteam/hq-api
 npm run inspect:player -w @reemteam/hq-api
 npm run hq:players:sync -w @reemteam/hq-api
+npm run hq:players:cleanup-duplicates -w @reemteam/hq-api
 ```
 
 `inspect:players` lists Mongo collections, document counts, and sample keys so you can verify the live ReemTeam data source. `inspect:player` shows one player's original `users` record, real wallet, recent transactions, completed-match rollup, legacy HQ profile if present, and daily stat rollup; set `PLAYER_LOOKUP=username` before running it. ReemTeamHQ reads original `users`, `wallets`, `matches`, and `transactions` first so balances and lifetime stats match the main ReemTeam app. HQ no longer creates player overlay records.
+
+`hq:players:cleanup-duplicates` defaults to dry-run. It reports HQ-created duplicate `users` records with `legacy.sourceId` and the original user each one points to. To delete the planned duplicates, set `HQ_DUPLICATE_CLEANUP_DRY_RUN=false` and `HQ_DUPLICATE_CLEANUP_CONFIRM=delete-hq-player-duplicates`. Set `HQ_DUPLICATE_CLEANUP_USERNAME=drewfree` to inspect one username first.
 
 ## Product Loop
 

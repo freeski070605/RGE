@@ -24,14 +24,23 @@ export const mapProfileStats = (profile: AnyDoc | null, dailyStats: AnyDoc | nul
 
   return {
     gamesPlayed,
+    matchesPlayed: gamesPlayed,
     wins,
+    totalWins: wins,
     losses,
-    winRate: gamesPlayed > 0 ? wins / gamesPlayed : 0,
+    winRate: gamesPlayed > 0 ? Number(((wins / gamesPlayed) * 100).toFixed(2)) : 0,
     reems: firstPositive(source, ['reems', 'reemCount']) || toNumber(fallback.reems),
+    totalReems: firstPositive(source, ['reems', 'reemCount']) || toNumber(fallback.totalReems ?? fallback.reems),
     drops: firstPositive(source, ['drops', 'dropCount']) || toNumber(fallback.drops),
     caughtDrops: firstPositive(source, ['caughtDrops', 'caughtDropCount']) || toNumber(fallback.caughtDrops),
     referrals: firstPositive(source, ['referralCount', 'referrals']) || toNumber(fallback.referrals),
     totalWinnings: firstPositive(source, ['totalWinnings', 'winnings']) || toNumber(fallback.totalWinnings),
+    usdEarned: toNumber(fallback.usdEarned),
+    rtcEarned: toNumber(fallback.rtcEarned),
+    usdNet: toNumber(fallback.usdNet),
+    rtcNet: toNumber(fallback.rtcNet),
+    biggestUsdPayout: toNumber(fallback.biggestUsdPayout),
+    biggestRtcPayout: toNumber(fallback.biggestRtcPayout),
     averageStake: firstPositive(source, ['averageStake', 'avgStake']) || toNumber(fallback.averageStake),
     highestStake: firstPositive(source, ['highestStake', 'highestStakeWin']) || toNumber(fallback.highestStake),
     lastActiveAt: source.lastActiveAt ?? fallback.lastActiveAt ?? source.updatedAt
@@ -99,9 +108,13 @@ export const getMatchStatsRollup = async (db: Db, playerId: unknown) => {
 
   const summary = {
     gamesPlayed: 0,
+    matchesPlayed: 0,
     wins: 0,
+    totalWins: 0,
     losses: 0,
     reems: 0,
+    totalReems: 0,
+    winRate: 0,
     usdEarned: 0,
     rtcEarned: 0,
     usdNet: 0,
@@ -126,10 +139,13 @@ export const getMatchStatsRollup = async (db: Db, playerId: unknown) => {
     const date = endTime ? new Date(endTime) : undefined;
 
     summary.gamesPlayed += 1;
+    summary.matchesPlayed += 1;
     summary.highestStake = Math.max(summary.highestStake, toNumber(player.stake));
     if (String(match.winner ?? '') === playerIdString) {
       summary.wins += 1;
+      summary.totalWins += 1;
       if (match.winType === 'REEM') summary.reems += 1;
+      if (match.winType === 'REEM') summary.totalReems += 1;
     }
     if (date && !Number.isNaN(date.getTime()) && (!summary.lastActiveAt || date > summary.lastActiveAt)) {
       summary.lastActiveAt = date;
@@ -147,6 +163,7 @@ export const getMatchStatsRollup = async (db: Db, playerId: unknown) => {
   }
 
   summary.losses = Math.max(0, summary.gamesPlayed - summary.wins);
+  summary.winRate = summary.gamesPlayed > 0 ? Number(((summary.wins / summary.gamesPlayed) * 100).toFixed(2)) : 0;
   summary.totalWinnings = summary.usdEarned + summary.rtcEarned;
 
   return summary;

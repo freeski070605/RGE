@@ -9,6 +9,7 @@
     "dev:memory": "tsx src/devMemory.ts",
     "seed": "tsx src/seed.ts",
     "hq:players:sync": "tsx src/syncPlayerOverlays.ts",
+    "hq:players:cleanup-duplicates": "tsx src/cleanupHqPlayerDuplicates.ts",
     "inspect:players": "tsx src/inspectPlayers.ts",
     "inspect:player": "tsx src/inspectPlayer.ts",
     "build": "tsc -p tsconfig.json",

@@ -1,4 +1,4 @@
-import type { Db } from 'mongodb';
+import { ObjectId, type Db } from 'mongodb';
 
 type AnyDoc = Record<string, any>;
 
@@ -36,13 +36,17 @@ const toNumber = (value: unknown, fallback = 0) => {
 export const getWalletForUser = async (db: Db, userId: unknown) => {
   const collections = new Set((await db.listCollections().toArray()).map((collection) => collection.name));
   if (!collections.has('wallets')) return null;
-  return db.collection('wallets').findOne({ userId });
+  const id = String(userId ?? '');
+  const userIds = ObjectId.isValid(id) ? [userId, id, new ObjectId(id)] : [userId, id];
+  return db.collection('wallets').findOne({ userId: { $in: userIds } });
 };
 
 export const getTransactionsForUser = async (db: Db, userId: unknown, limit = 100) => {
   const collections = new Set((await db.listCollections().toArray()).map((collection) => collection.name));
   if (!collections.has('transactions')) return [];
-  return db.collection('transactions').find({ userId }).sort({ date: -1, createdAt: -1 }).limit(limit).toArray();
+  const id = String(userId ?? '');
+  const userIds = ObjectId.isValid(id) ? [userId, id, new ObjectId(id)] : [userId, id];
+  return db.collection('transactions').find({ userId: { $in: userIds } }).sort({ date: -1, createdAt: -1 }).limit(limit).toArray();
 };
 
 export const mapWalletSummary = (profile: AnyDoc | null, user: AnyDoc | null, wallet: AnyDoc | null = null) => {
