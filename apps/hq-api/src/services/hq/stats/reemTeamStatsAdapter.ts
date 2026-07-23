@@ -87,15 +87,17 @@ export const getDailyStatsRollup = async (db: Db, playerId: unknown, username?: 
 
 const USD_GAME_MODES = new Set(['PRIVATE_USD_TABLE', 'USD_CONTEST']);
 
-export const getMatchStatsRollup = async (db: Db, playerId: unknown) => {
+export const getMatchStatsRollup = async (db: Db, playerId: unknown, username?: string) => {
   const collections = new Set((await db.listCollections().toArray()).map((collection) => collection.name));
   if (!collections.has('matches')) return null;
   const playerIdString = String(playerId ?? '');
   const playerIdQuery = ObjectId.isValid(playerIdString) ? [playerId, playerIdString, new ObjectId(playerIdString)] : [playerId, playerIdString];
+  const playerClauses: AnyDoc[] = [{ 'players.userId': { $in: playerIdQuery } }];
+  if (username) playerClauses.push({ 'players.username': username });
 
   const matches = await db.collection('matches').find({
     status: 'completed',
-    'players.userId': { $in: playerIdQuery }
+    $or: playerClauses
   }).project({ tableId: 1, players: 1, winner: 1, winType: 1, endTime: 1, updatedAt: 1, createdAt: 1 }).toArray();
 
   if (!matches.length) return null;
@@ -128,7 +130,7 @@ export const getMatchStatsRollup = async (db: Db, playerId: unknown) => {
 
   for (const match of matches) {
     const player = Array.isArray(match.players)
-      ? match.players.find((entry: AnyDoc) => String(entry.userId) === playerIdString)
+      ? match.players.find((entry: AnyDoc) => String(entry.userId) === playerIdString || (username && entry.username === username))
       : null;
     if (!player) continue;
 
@@ -141,7 +143,9 @@ export const getMatchStatsRollup = async (db: Db, playerId: unknown) => {
     summary.gamesPlayed += 1;
     summary.matchesPlayed += 1;
     summary.highestStake = Math.max(summary.highestStake, toNumber(player.stake));
-    if (String(match.winner ?? '') === playerIdString) {
+    const wonById = String(match.winner ?? '') === playerIdString;
+    const wonByUsernameFallback = username && player.username === username && payout > 0;
+    if (wonById || wonByUsernameFallback) {
       summary.wins += 1;
       summary.totalWins += 1;
       if (match.winType === 'REEM') summary.reems += 1;

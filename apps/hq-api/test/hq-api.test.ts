@@ -102,6 +102,33 @@ test('ReemTeamHQ CRUD, Growth Plays, Content Studio, and audit log are clean-sla
         endTime: new Date()
       }
     ]);
+    const historicalUserId = new mongoose.default.Types.ObjectId();
+    await mongoose.default.connection.db?.collection('users').insertOne({
+      _id: historicalUserId,
+      displayName: 'Historical Username Player',
+      username: 'history_live',
+      email: 'history@example.com',
+      role: 'player',
+      status: 'active'
+    });
+    await mongoose.default.connection.db?.collection('wallets').insertOne({
+      userId: historicalUserId,
+      usdBalance: 0,
+      rtcBalance: 12000,
+      availableBalance: 0,
+      pendingWithdrawals: 0,
+      lifetimeDeposits: 0,
+      lifetimeWithdrawals: 0,
+      lastRtcRefill: new Date()
+    });
+    await mongoose.default.connection.db?.collection('matches').insertOne({
+      tableId,
+      status: 'completed',
+      winner: new mongoose.default.Types.ObjectId(),
+      winType: 'REEM',
+      players: [{ userId: new mongoose.default.Types.ObjectId(), username: 'history_live', stake: 200, buyIn: 200, payout: 500, isAI: false }],
+      endTime: new Date()
+    });
     await mongoose.default.connection.db?.collection('transactions').insertOne({
       userId: legacyUserId,
       type: 'RtcPurchase',
@@ -118,6 +145,9 @@ test('ReemTeamHQ CRUD, Growth Plays, Content Studio, and audit log are clean-sla
     assert.equal(importedPlayers.payload.find((row: any) => row.username === 'legacy_live')?.rtcBalance, 83000);
     assert.equal(importedPlayers.payload.find((row: any) => row.username === 'legacy_live')?.gamesPlayed, 2);
     assert.equal(importedPlayers.payload.find((row: any) => row.username === 'legacy_live')?.wins, 1);
+    assert.equal(importedPlayers.payload.find((row: any) => row.username === 'history_live')?.rtcBalance, 12000);
+    assert.equal(importedPlayers.payload.find((row: any) => row.username === 'history_live')?.gamesPlayed, 1);
+    assert.equal(importedPlayers.payload.find((row: any) => row.username === 'history_live')?.wins, 1);
     assert.equal(await User.countDocuments({ username: 'legacy_live' }), 0);
 
     const originalProfile = await api(`/api/hq/users/${legacyUserId}`);
@@ -136,7 +166,7 @@ test('ReemTeamHQ CRUD, Growth Plays, Content Studio, and audit log are clean-sla
     const integrity = await api('/api/hq/data-integrity/players');
     assert.equal(integrity.status, 200);
     assert.equal(integrity.payload.hqReadingFrom, 'original_reemteam_players');
-    assert.equal(integrity.payload.originalPlayerCount, 1);
+    assert.equal(integrity.payload.originalPlayerCount, 2);
 
     const user = await api('/api/hq/users', {
       method: 'POST',

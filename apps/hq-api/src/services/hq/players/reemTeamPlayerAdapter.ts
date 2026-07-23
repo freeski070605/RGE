@@ -70,7 +70,7 @@ export const listReemTeamPlayers = async (search = '') => {
     const profile = await profileFor(db, user);
     const [wallet, matchStats, dailyStats] = await Promise.all([
       getWalletForUser(db, user._id),
-      getMatchStatsRollup(db, user._id),
+      getMatchStatsRollup(db, user._id, user.username),
       getDailyStatsRollup(db, user._id, user.username)
     ]);
     rows.push(mapReemTeamPlayer({ user, profile, wallet, dailyStats: matchStats ?? dailyStats }));
@@ -87,7 +87,7 @@ export const getReemTeamPlayer = async (id: string) => {
   const profile = await profileFor(db, user);
   const [wallet, matchStats, dailyStats] = await Promise.all([
     getWalletForUser(db, user._id),
-    getMatchStatsRollup(db, user._id),
+    getMatchStatsRollup(db, user._id, user.username),
     getDailyStatsRollup(db, user._id, user.username)
   ]);
   return mapReemTeamPlayer({ user, profile, wallet, dailyStats: matchStats ?? dailyStats });

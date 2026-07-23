@@ -101,22 +101,27 @@ try {
   const matchRows = userId
     ? await db.collection('matches').find({
       status: 'completed',
-      'players.userId': { $in: idVariants(userId) }
+      $or: [
+        { 'players.userId': { $in: idVariants(userId) } },
+        { 'players.username': username }
+      ]
     }).sort({ endTime: -1, updatedAt: -1, createdAt: -1 }).limit(20).toArray()
     : [];
   const matchRollup = matchRows.reduce((totals: AnyDoc, match) => {
-    const player = Array.isArray(match.players) ? match.players.find((entry: AnyDoc) => idOrString(entry.userId) === idOrString(userId)) : null;
+    const player = Array.isArray(match.players) ? match.players.find((entry: AnyDoc) => idOrString(entry.userId) === idOrString(userId) || entry.username === username) : null;
     if (!player) return totals;
     totals.rows += 1;
     totals.matchesPlayed += 1;
-    if (idOrString(match.winner) === idOrString(userId)) {
+    if (idOrString(player.userId) === idOrString(userId)) totals.rowsMatchedByUserId += 1;
+    if (player.username === username) totals.rowsMatchedByUsername += 1;
+    if (idOrString(match.winner) === idOrString(userId) || (player.username === username && numberValue(player, ['payout']) > 0)) {
       totals.wins += 1;
       if (match.winType === 'REEM') totals.reems += 1;
     }
     totals.highestStake = Math.max(totals.highestStake, numberValue(player, ['stake']));
     totals.grossPayout += Math.max(0, numberValue(player, ['payout']));
     return totals;
-  }, { rows: 0, matchesPlayed: 0, wins: 0, reems: 0, highestStake: 0, grossPayout: 0 });
+  }, { rows: 0, rowsMatchedByUserId: 0, rowsMatchedByUsername: 0, matchesPlayed: 0, wins: 0, reems: 0, highestStake: 0, grossPayout: 0 });
   const dailyRows = await db.collection('player_stats_daily').find({
     $or: [
       ...(userId ? [{ playerId: userId }, { playerId: idOrString(userId) }] : []),
