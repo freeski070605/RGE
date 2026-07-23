@@ -373,6 +373,23 @@ th {
   text-transform: uppercase;
 }
 
+.sort-button {
+  min-height: 28px;
+  justify-content: flex-start;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.sort-button:hover,
+.sort-button.active {
+  color: #f7fafc;
+}
+
 td {
   color: #d7dde7;
 }

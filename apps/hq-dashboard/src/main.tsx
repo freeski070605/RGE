@@ -3,6 +3,9 @@ import { createRoot } from 'react-dom/client';
 import {
   Activity,
   AlertTriangle,
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
   BarChart3,
   CalendarDays,
   CheckCircle2,
@@ -29,6 +32,8 @@ type AnyRow = Record<string, any>;
 type Operator = { email: string; name: string; role: string };
 type Health = { status: string; checks: AnyRow[]; counts: Record<string, number>; database?: AnyRow };
 type CommandCenter = { sentence: string; metrics: AnyRow[]; recommendedActions: AnyRow[]; urgentAlerts: AnyRow[]; systemHealth: string };
+type SortDirection = 'asc' | 'desc';
+type SortState = { field: string; direction: SortDirection } | null;
 
 const icons = [LayoutDashboard, Users, Table2, Crown, CalendarDays, Target, Activity, Flame, Megaphone, HeartHandshake, Coins, Shield, BarChart3, CheckCircle2, Settings];
 const nav = hqSections;
@@ -300,7 +305,7 @@ function Page(input: {
   return (
     <section className="page-grid">
       <Panel title={`${input.title} Records`} icon={<ClipboardList size={18} />}>
-        <Rows rows={input.rows} fields={input.fields} onSelect={input.setSelected} />
+        <Rows rows={input.rows} fields={input.fields} onSelect={input.setSelected} sortable={input.title === 'Players' || input.title === 'Wallet/Ops'} />
         {!input.rows.length ? <div className="empty">No {input.title.toLowerCase()} records yet. Use the form to create one or run the seed script.</div> : null}
       </Panel>
       <aside className="side-panel">
@@ -361,8 +366,73 @@ function PlayList({ plays, run, loadAll }: { plays: AnyRow[]; run: (fn: () => Pr
   return <div className="play-list">{plays.map((play) => <article className="play-card" key={play.id}><div className="play-card-top"><span>{play.playType}</span><span>{play.urgency}</span><strong>{Math.round(play.finalScore ?? 0)}</strong></div><h3>{play.title}</h3><p>{play.whyItMatters}</p><div className="why-box"><strong>Why this?</strong><span>{play.whyThis?.campaignFit ?? 'HQ ranked this from current signals.'}</span></div><div className="row-actions"><button onClick={() => void run(async () => { await api(`/hq/growth-plays/${play.id}/approve`, { method: 'POST' }); await loadAll(); })}>Approve</button><button className="primary" onClick={() => void run(async () => { await api(`/hq/growth-plays/${play.id}/build-content`, { method: 'POST' }); await loadAll(); })}>Build content</button></div></article>)}</div>;
 }
 
-function Rows({ rows, fields, onSelect }: { rows: AnyRow[]; fields: string[]; onSelect: (row: AnyRow) => void }) {
-  return <div className="table-wrap"><table><thead><tr>{fields.map((field) => <th key={field}>{field}</th>)}</tr></thead><tbody>{rows.map((row) => <tr key={row.id ?? JSON.stringify(row)} onClick={() => onSelect(row)}>{fields.map((field) => <td key={field}>{formatCell(row[field])}</td>)}</tr>)}</tbody></table></div>;
+function Rows({ rows, fields, onSelect, sortable = false }: { rows: AnyRow[]; fields: string[]; onSelect: (row: AnyRow) => void; sortable?: boolean }) {
+  const [sort, setSort] = useState<SortState>(null);
+  const sortedRows = useMemo(() => {
+    if (!sort) return rows;
+    return [...rows].sort((left, right) => compareValues(left[sort.field], right[sort.field], sort.direction));
+  }, [rows, sort]);
+  const changeSort = (field: string) => {
+    if (!sortable) return;
+    setSort((current) => {
+      if (!current || current.field !== field) return { field, direction: 'asc' };
+      if (current.direction === 'asc') return { field, direction: 'desc' };
+      return null;
+    });
+  };
+
+  return (
+    <div className="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            {fields.map((field) => {
+              const active = sort?.field === field;
+              const Icon = !active ? ArrowUpDown : sort.direction === 'asc' ? ArrowUp : ArrowDown;
+              return (
+                <th key={field} aria-sort={active ? (sort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                  {sortable ? (
+                    <button className={`sort-button ${active ? 'active' : ''}`} onClick={() => changeSort(field)} type="button">
+                      <span>{field}</span>
+                      <Icon size={13} />
+                    </button>
+                  ) : field}
+                </th>
+              );
+            })}
+          </tr>
+        </thead>
+        <tbody>
+          {sortedRows.map((row) => <tr key={row.id ?? JSON.stringify(row)} onClick={() => onSelect(row)}>{fields.map((field) => <td key={field}>{formatCell(row[field])}</td>)}</tr>)}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function compareValues(left: unknown, right: unknown, direction: SortDirection) {
+  const multiplier = direction === 'asc' ? 1 : -1;
+  const leftValue = sortableValue(left);
+  const rightValue = sortableValue(right);
+  if (typeof leftValue === 'number' && typeof rightValue === 'number') return (leftValue - rightValue) * multiplier;
+  return String(leftValue).localeCompare(String(rightValue), undefined, { numeric: true, sensitivity: 'base' }) * multiplier;
+}
+
+function sortableValue(value: unknown) {
+  if (Array.isArray(value)) return value.join(', ');
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === 'number') return value;
+  if (typeof value === 'boolean') return value ? 1 : 0;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    const timestamp = Date.parse(trimmed);
+    if (trimmed && !Number.isNaN(timestamp) && /[-/:T]/.test(trimmed)) return timestamp;
+    const numeric = Number(trimmed.replace(/[$,%]/g, ''));
+    if (trimmed && Number.isFinite(numeric)) return numeric;
+    return trimmed;
+  }
+  if (value && typeof value === 'object') return JSON.stringify(value);
+  return value ?? '';
 }
 
 function formatCell(value: unknown) {
