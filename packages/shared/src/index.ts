@@ -18,7 +18,7 @@ export type PlayerTag = (typeof playerTags)[number];
 
 export const hqSections = [
   'Command Center',
-  'Players',
+  'Account Management',
   'Tables',
   'Cribs',
   'Events',
@@ -27,7 +27,6 @@ export const hqSections = [
   'Growth Plays',
   'Content Studio',
   'Referrals',
-  'Wallet/Ops',
   'Support',
   'Analytics',
   'System Health',

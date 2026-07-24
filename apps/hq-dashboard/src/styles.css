@@ -283,6 +283,13 @@ label {
   align-content: start;
 }
 
+.inline-form {
+  display: grid;
+  gap: 12px;
+  border-top: 1px solid #242c38;
+  padding-top: 16px;
+}
+
 .panel-header {
   display: flex;
   align-items: center;

@@ -18,6 +18,7 @@ import {
   LogOut,
   Megaphone,
   RefreshCw,
+  Save,
   Settings,
   Shield,
   Sparkles,
@@ -35,11 +36,25 @@ type CommandCenter = { sentence: string; metrics: AnyRow[]; recommendedActions: 
 type SortDirection = 'asc' | 'desc';
 type SortState = { field: string; direction: SortDirection } | null;
 
-const icons = [LayoutDashboard, Users, Table2, Crown, CalendarDays, Target, Activity, Flame, Megaphone, HeartHandshake, Coins, Shield, BarChart3, CheckCircle2, Settings];
 const nav = hqSections;
+const sectionIcons: Record<string, React.ComponentType<{ size?: number }>> = {
+  'Command Center': LayoutDashboard,
+  'Account Management': Users,
+  Tables: Table2,
+  Cribs: Crown,
+  Events: CalendarDays,
+  Campaigns: Target,
+  'Game Intelligence': Activity,
+  'Growth Plays': Flame,
+  'Content Studio': Megaphone,
+  Referrals: HeartHandshake,
+  Support: Shield,
+  Analytics: BarChart3,
+  'System Health': CheckCircle2,
+  Settings
+};
 
 const defaults: Record<string, AnyRow> = {
-  Players: { displayName: '', username: '', email: '', role: 'player', tags: ['new_player'], status: 'active' },
   Tables: { tableName: '', cribId: '', stake: 5, maxSeats: 4, status: 'open', visibility: 'public' },
   Cribs: { cribName: '', description: '', stakeTier: 'low', theme: 'classic', status: 'active', growthPriority: 50, eventEligible: true },
   Events: { eventName: '', eventType: 'reem_chase', description: '', startTime: localDate(1), endTime: localDate(4), status: 'scheduled', contentGoal: '', growthGoal: '' },
@@ -47,14 +62,13 @@ const defaults: Record<string, AnyRow> = {
   'Game Intelligence': { signalType: 'reem_detected', sourceType: 'gameplay', sourceId: `manual-${Date.now()}`, title: '', description: '', occurredAt: new Date().toISOString(), severity: 'high', confidence: 90, visibilitySafe: true },
   'Content Studio': { title: '', format: 'IG Story', channel: 'Content Studio', caption: '', hook: '', overlayText: '', cta: 'Join the action', status: 'draft' },
   Referrals: { ownerUserId: '', code: '', status: 'active', rewardAmount: 0 },
-  'Wallet/Ops': { userId: '', amount: 0, currency: 'RTC', reason: '' },
   Support: { userId: '', title: '', severity: 'medium', status: 'open', notes: [] },
   Analytics: { channel: 'IG Story', format: 'Leaderboard card', metric: 'table_joins', value: 0, learning: '' },
   Settings: { automationMode: 'assisted', approvedChannels: ['Content Studio', 'In-app banner', 'Push notification'], approvedFormats: ['IG Story', 'Leaderboard card', 'Referral promo'], activeCampaign: '' }
 };
 
 const endpoints: Record<string, string> = {
-  Players: '/hq/users',
+  'Account Management': '/hq/users',
   Tables: '/hq/tables',
   Cribs: '/hq/cribs',
   Events: '/hq/events',
@@ -63,7 +77,6 @@ const endpoints: Record<string, string> = {
   'Growth Plays': '/hq/growth-plays',
   'Content Studio': '/hq/content-drafts',
   Referrals: '/hq/referrals',
-  'Wallet/Ops': '/hq/wallet',
   Support: '/hq/support',
   Analytics: '/hq/analytics',
   'System Health': '/hq/system-health',
@@ -71,7 +84,7 @@ const endpoints: Record<string, string> = {
 };
 
 const fields: Record<string, string[]> = {
-  Players: ['displayName', 'username', 'rtcBalance', 'gamesPlayed', 'wins', 'reems', 'tags', 'status'],
+  'Account Management': ['displayName', 'username', 'usdBalance', 'rtcBalance', 'gamesPlayed', 'wins', 'reems', 'winRate', 'isVip', 'status'],
   Tables: ['tableName', 'stake', 'maxSeats', 'status', 'visibility', 'priority', 'featured'],
   Cribs: ['cribName', 'stakeTier', 'status', 'featured', 'growthPriority', 'description'],
   Events: ['eventName', 'eventType', 'status', 'startTime', 'endTime', 'growthGoal'],
@@ -80,7 +93,6 @@ const fields: Record<string, string[]> = {
   'Growth Plays': ['title', 'playType', 'urgency', 'finalScore', 'status', 'recommendedAction'],
   'Content Studio': ['title', 'format', 'channel', 'caption', 'status', 'scheduledFor'],
   Referrals: ['code', 'ownerUserId', 'invitedUserId', 'status', 'rewardAmount', 'abuseFlags'],
-  'Wallet/Ops': ['username', 'email', 'usdBalance', 'rtcBalance', 'pendingWithdrawals', 'lifetimeDeposits', 'lifetimeWithdrawals'],
   Support: ['title', 'userId', 'severity', 'status', 'notes'],
   Analytics: ['learning', 'channel', 'format', 'metric', 'value'],
   'System Health': ['component', 'status', 'detail'],
@@ -181,7 +193,7 @@ function App() {
 
   const submit = async (page: string) => {
     const body = normalizePayload(draft[page] ?? {});
-    const endpoint = page === 'Analytics' ? '/hq/analytics/performance-results' : page === 'Wallet/Ops' ? '/hq/wallet/adjust' : endpoints[page];
+    const endpoint = page === 'Analytics' ? '/hq/analytics/performance-results' : endpoints[page];
     const method = page === 'Settings' ? 'PATCH' : 'POST';
     await run(async () => {
       await api(endpoint, { method, body: JSON.stringify(body) });
@@ -222,8 +234,8 @@ function App() {
       <aside className="nav">
         <div className="brand-lockup"><Crown size={26} /><div><strong>ReemTeamHQ</strong><span>{operator.role}</span></div></div>
         <nav>
-          {nav.map((section, index) => {
-            const Icon = icons[index] ?? Sparkles;
+          {nav.map((section) => {
+            const Icon = sectionIcons[section] ?? Sparkles;
             const count = Array.isArray(data[section]) ? data[section].length : section === 'System Health' ? health?.checks.length ?? 0 : undefined;
             return <button key={section} className={active === section ? 'active' : ''} onClick={() => { setActive(section); setSelected(null); }}><Icon size={17} />{section}{count != null ? <small>{count}</small> : null}</button>;
           })}
@@ -305,8 +317,8 @@ function Page(input: {
   return (
     <section className="page-grid">
       <Panel title={`${input.title} Records`} icon={<ClipboardList size={18} />}>
-        <Rows rows={input.rows} fields={input.fields} onSelect={input.setSelected} sortable={input.title === 'Players' || input.title === 'Wallet/Ops'} />
-        {!input.rows.length ? <div className="empty">No {input.title.toLowerCase()} records yet. Use the form to create one or run the seed script.</div> : null}
+        <Rows rows={input.rows} fields={input.fields} onSelect={input.setSelected} sortable={input.title === 'Account Management'} />
+        {!input.rows.length ? <div className="empty">No {input.title.toLowerCase()} records loaded yet.</div> : null}
       </Panel>
       <aside className="side-panel">
         {canCreate ? <Editor page={input.title} value={input.draft} setValue={input.setDraft} onSubmit={input.onSubmit} /> : null}
@@ -319,7 +331,7 @@ function Page(input: {
 function Editor({ page, value, setValue, onSubmit }: { page: string; value: AnyRow; setValue: (value: AnyRow) => void; onSubmit: () => Promise<void> }) {
   return (
     <form className="panel form-panel" onSubmit={(event) => { event.preventDefault(); void onSubmit(); }}>
-      <div className="panel-header"><Sparkles size={18} /><h2>{page === 'Wallet/Ops' ? 'Request Adjustment' : page === 'Analytics' ? 'Record Result' : page === 'Settings' ? 'Save Settings' : `Create ${page}`}</h2></div>
+      <div className="panel-header"><Sparkles size={18} /><h2>{page === 'Analytics' ? 'Record Result' : page === 'Settings' ? 'Save Settings' : `Create ${page}`}</h2></div>
       {Object.entries(value).map(([key, fieldValue]) => (
         <label key={key}>{key}<input value={Array.isArray(fieldValue) ? fieldValue.join(', ') : String(fieldValue ?? '')} onChange={(event) => setValue({ ...value, [key]: event.target.value })} /></label>
       ))}
@@ -346,10 +358,40 @@ function Detail({ page, row, run, loadAll }: { page: string; row: AnyRow; run: (
         {page === 'Campaigns' ? <><button onClick={() => void action(`${endpoint}/${row.id}/activate`)}>Activate</button><button onClick={() => void action(`${endpoint}/${row.id}/deactivate`)}>Deactivate</button></> : null}
         {page === 'Growth Plays' ? <><button onClick={() => void action(`${endpoint}/${row.id}/approve`)}>Approve</button><button onClick={() => void action(`${endpoint}/${row.id}/dismiss`)}>Dismiss</button><button className="primary" onClick={() => void action(`${endpoint}/${row.id}/build-content`)}>Build Content</button></> : null}
         {page === 'Content Studio' ? <><button onClick={() => void action(`${endpoint}/${row.id}/approve`)}>Approve</button><button onClick={() => void action(`${endpoint}/${row.id}/schedule`, 'POST', { scheduledFor: localDate(2) })}>Schedule</button><button className="primary" onClick={() => void action(`${endpoint}/${row.id}/publish-now`)}>Publish Now</button></> : null}
-        {page === 'Players' ? <><button onClick={() => void action(`${endpoint}/${row.id}/ban`, 'POST', { isBanned: !row.isBanned })}>{row.isBanned ? 'Unban' : 'Ban'}</button><button onClick={() => void action(`${endpoint}/${row.id}/freeze`, 'POST', { isFrozen: !row.isFrozen })}>{row.isFrozen ? 'Unfreeze' : 'Freeze'}</button><button onClick={() => void action(`${endpoint}/${row.id}/vip`, 'POST', { isVip: !row.isVip })}>{row.isVip ? 'Remove VIP' : 'Make VIP'}</button></> : null}
+        {page === 'Account Management' ? <><button onClick={() => void action(`${endpoint}/${row.id}/ban`, 'POST', { isBanned: !row.isBanned })}>{row.isBanned ? 'Unban' : 'Ban'}</button><button onClick={() => void action(`${endpoint}/${row.id}/freeze`, 'POST', { isFrozen: !row.isFrozen })}>{row.isFrozen ? 'Unfreeze' : 'Freeze'}</button><button onClick={() => void action(`${endpoint}/${row.id}/vip`, 'POST', { isVip: !row.isVip })}>{row.isVip ? 'Remove VIP' : 'Make VIP'}</button></> : null}
         {page === 'Support' ? <button className="primary" onClick={() => void action(`${endpoint}/${row.id}/resolve`)}>Resolve</button> : null}
       </div>
+      {page === 'Account Management' ? <WalletAdjustment row={row} run={run} loadAll={loadAll} /> : null}
     </Panel>
+  );
+}
+
+function WalletAdjustment({ row, run, loadAll }: { row: AnyRow; run: (fn: () => Promise<void>) => Promise<void>; loadAll: () => Promise<void> }) {
+  const [draft, setDraft] = useState({ amount: '', currency: 'RTC', reason: '' });
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    await run(async () => {
+      await api('/hq/wallet/adjust', {
+        method: 'POST',
+        body: JSON.stringify({
+          userId: row.id,
+          amount: Number(draft.amount),
+          currency: draft.currency,
+          reason: draft.reason
+        })
+      });
+      setDraft({ amount: '', currency: 'RTC', reason: '' });
+      await loadAll();
+    });
+  };
+
+  return (
+    <form className="inline-form" onSubmit={submit}>
+      <label>amount<input value={draft.amount} onChange={(event) => setDraft({ ...draft, amount: event.target.value })} placeholder="e.g. 5000 or -1000" /></label>
+      <label>currency<input value={draft.currency} onChange={(event) => setDraft({ ...draft, currency: event.target.value.toUpperCase() })} /></label>
+      <label>reason<input value={draft.reason} onChange={(event) => setDraft({ ...draft, reason: event.target.value })} placeholder="Adjustment reason" /></label>
+      <button className="primary"><Save size={16} /> Apply wallet adjustment</button>
+    </form>
   );
 }
 
@@ -370,7 +412,7 @@ function Rows({ rows, fields, onSelect, sortable = false }: { rows: AnyRow[]; fi
   const [sort, setSort] = useState<SortState>(null);
   const sortedRows = useMemo(() => {
     if (!sort) return rows;
-    return [...rows].sort((left, right) => compareValues(left[sort.field], right[sort.field], sort.direction));
+    return [...rows].sort((left, right) => compareValues(fieldValue(left, sort.field), fieldValue(right, sort.field), sort.direction));
   }, [rows, sort]);
   const changeSort = (field: string) => {
     if (!sortable) return;
@@ -403,7 +445,7 @@ function Rows({ rows, fields, onSelect, sortable = false }: { rows: AnyRow[]; fi
           </tr>
         </thead>
         <tbody>
-          {sortedRows.map((row) => <tr key={row.id ?? JSON.stringify(row)} onClick={() => onSelect(row)}>{fields.map((field) => <td key={field}>{formatCell(row[field])}</td>)}</tr>)}
+          {sortedRows.map((row) => <tr key={row.id ?? JSON.stringify(row)} onClick={() => onSelect(row)}>{fields.map((field) => <td key={field}>{formatCell(fieldValue(row, field))}</td>)}</tr>)}
         </tbody>
       </table>
     </div>
@@ -433,6 +475,15 @@ function sortableValue(value: unknown) {
   }
   if (value && typeof value === 'object') return JSON.stringify(value);
   return value ?? '';
+}
+
+function fieldValue(row: AnyRow, field: string) {
+  if (field in row) return row[field];
+  if (field === 'usdBalance') return row.walletSummary?.usdBalance;
+  if (field === 'pendingWithdrawals') return row.walletSummary?.pendingWithdrawals;
+  if (field === 'lifetimeDeposits') return row.walletSummary?.lifetimeDeposits;
+  if (field === 'lifetimeWithdrawals') return row.walletSummary?.lifetimeWithdrawals;
+  return field.split('.').reduce((current, key) => current?.[key], row);
 }
 
 function formatCell(value: unknown) {
